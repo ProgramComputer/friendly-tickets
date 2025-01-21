@@ -5,6 +5,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BarChart, Users, Clock, CheckCircle, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
+
+type Ticket = Database["public"]["Tables"]["tickets"]["Row"];
 
 interface TicketStats {
   open: number;
@@ -34,7 +37,7 @@ const Index = () => {
     },
   });
 
-  const calculateAvgResponseTime = (tickets: any[]) => {
+  const calculateAvgResponseTime = (tickets: Ticket[]) => {
     if (!tickets.length) return 0;
     const responseTimes = tickets.map(t => {
       const created = new Date(t.created_at);
