@@ -22,7 +22,7 @@ const Index = () => {
     queryFn: async () => {
       const { data: tickets, error } = await supabase
         .from("tickets")
-        .select("status, created_at, updated_at");
+        .select("*");  // Select all fields to match the Ticket type
 
       if (error) throw error;
 
