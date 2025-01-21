@@ -1,12 +1,35 @@
 import React from "react";
-import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
-import { Home, Inbox, Users, Settings, BarChart } from "lucide-react";
+import { 
+  Sidebar, 
+  SidebarContent, 
+  SidebarGroup, 
+  SidebarGroupContent, 
+  SidebarGroupLabel, 
+  SidebarMenu, 
+  SidebarMenuButton, 
+  SidebarMenuItem 
+} from "@/components/ui/sidebar";
+import { 
+  Home, 
+  Inbox, 
+  Users, 
+  Settings, 
+  BarChart,
+  MessageSquare,
+  Book,
+  UserCircle,
+  Building2
+} from "lucide-react";
 
 const navigationItems = [
   { title: "Dashboard", icon: Home, path: "/" },
   { title: "Tickets", icon: Inbox, path: "/tickets" },
-  { title: "Customers", icon: Users, path: "/customers" },
+  { title: "Messages", icon: MessageSquare, path: "/messages" },
+  { title: "Knowledge Base", icon: Book, path: "/knowledge-base" },
+  { title: "Teams", icon: Users, path: "/teams" },
   { title: "Analytics", icon: BarChart, path: "/analytics" },
+  { title: "Users", icon: UserCircle, path: "/users" },
+  { title: "Organizations", icon: Building2, path: "/organizations" },
   { title: "Settings", icon: Settings, path: "/settings" },
 ];
 
