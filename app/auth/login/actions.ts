@@ -80,12 +80,13 @@ export async function login(formData: FormData) {
 }
 
 export async function signup(formData: FormData) {
+  const cookieStore = await cookies()
+  const supabase = await createClient(cookieStore)
+  
   const email = formData.get('email') as string
   const password = formData.get('password') as string
   
   try {
-    const supabase = createClient()
-
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
