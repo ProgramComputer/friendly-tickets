@@ -1,0 +1,8 @@
+{
+  "project_id": "paluzqdyjmgkiycpziiw",
+  "schema": "public",
+  "typescript": {
+    "version": "5.0",
+    "type": "module"
+  }
+} 

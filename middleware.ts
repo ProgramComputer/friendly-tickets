@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { ROUTES } from '@/lib/constants/routes'
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -13,17 +14,17 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
+        async get(name: string) {
           return request.cookies.get(name)?.value
         },
-        set(name: string, value: string, options: CookieOptions) {
+        async set(name: string, value: string, options: CookieOptions) {
           response.cookies.set({
             name,
             value,
             ...options,
           })
         },
-        remove(name: string, options: CookieOptions) {
+        async remove(name: string, options: CookieOptions) {
           response.cookies.set({
             name,
             value: '',
@@ -34,89 +35,45 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  try {
-    // Get session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    
-    if (sessionError) throw sessionError
+  // Refresh session if expired - required for Server Components
+  const { data: { session }, error } = await supabase.auth.getSession()
 
-    // Public routes that don't require authentication
-    const isAuthRoute = request.nextUrl.pathname === '/login' || 
-                       request.nextUrl.pathname === '/signup'
-    
-    // If no session and trying to access protected route, redirect to login
-    if (!session && !isAuthRoute) {
-      return NextResponse.redirect(new URL('/login', request.url))
-    }
-
-    // If has session and trying to access auth routes, redirect to appropriate dashboard
-    if (session && isAuthRoute) {
-      const { data: teamMember } = await supabase
-        .from('team_members')
-        .select('role')
-        .eq('user_id', session.user.id)
-        .single()
-
-      if (teamMember) {
-        if (teamMember.role === 'admin') {
-          return NextResponse.redirect(new URL('/employee/admin', request.url))
-        } else if (teamMember.role === 'agent') {
-          return NextResponse.redirect(new URL('/employee/agent', request.url))
-        }
-      } else {
-        // If not in team_members, they must be a customer
-        return NextResponse.redirect(new URL('/customer/tickets', request.url))
-      }
-    }
-
-    // Role-based access control for protected routes
-    if (session) {
-      const { data: teamMember } = await supabase
-        .from('team_members')
-        .select('role')
-        .eq('user_id', session.user.id)
-        .single()
-
-      const isAdminRoute = request.nextUrl.pathname.startsWith('/employee/admin')
-      const isAgentRoute = request.nextUrl.pathname.startsWith('/employee/agent')
-      const isCustomerRoute = request.nextUrl.pathname.startsWith('/customer')
-
-      // Protect admin routes
-      if (isAdminRoute && (!teamMember || teamMember.role !== 'admin')) {
-        if (teamMember?.role === 'agent') {
-          return NextResponse.redirect(new URL('/employee/agent', request.url))
-        }
-        return NextResponse.redirect(new URL('/customer/tickets', request.url))
-      }
-
-      // Protect agent routes
-      if (isAgentRoute && (!teamMember || (teamMember.role !== 'admin' && teamMember.role !== 'agent'))) {
-        return NextResponse.redirect(new URL('/customer/tickets', request.url))
-      }
-
-      // Protect customer routes
-      if (isCustomerRoute && teamMember) {
-        if (teamMember.role === 'admin') {
-          return NextResponse.redirect(new URL('/employee/admin', request.url))
-        } else if (teamMember.role === 'agent') {
-          return NextResponse.redirect(new URL('/employee/agent', request.url))
-        }
-      }
-    }
-
-    return response
-  } catch (error) {
-    // If there's an error, redirect to login
-    return NextResponse.redirect(new URL('/login', request.url))
+  // If there's no session and we're not on an auth page, redirect to login
+  const isAuthRoute = request.nextUrl.pathname.startsWith('/auth')
+  if (!session && !isAuthRoute) {
+    const redirectUrl = new URL(ROUTES.auth.login, request.url)
+    redirectUrl.searchParams.set('redirectedFrom', request.nextUrl.pathname)
+    return NextResponse.redirect(redirectUrl)
   }
+
+  // If we have a session but we're on an auth page, redirect to appropriate dashboard
+  if (session && isAuthRoute) {
+    const { data: teamMember } = await supabase
+      .from('team_members')
+      .select('role')
+      .eq('user_id', session.user.id)
+      .single()
+
+    let redirectTo: string = ROUTES.tickets.customer.list
+    if (teamMember) {
+      redirectTo = teamMember.role === 'admin' ? ROUTES.role.admin : ROUTES.role.agent
+    }
+
+    return NextResponse.redirect(new URL(redirectTo, request.url))
+  }
+
+  return response
 }
 
 export const config = {
   matcher: [
-    '/',
-    '/login',
-    '/signup',
-    '/employee/:path*',
-    '/customer/:path*'
-  ]
-} 
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public folder
+     */
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
+}

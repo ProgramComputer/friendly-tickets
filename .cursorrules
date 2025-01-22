@@ -221,6 +221,8 @@ function formatInput({ input }: { input: string }) {
 
 ## Supabase, Database, and GraphQL
 
+- Fetch latest Supabase documentation from https://supabase.com/docs/reference/javascript;
+
 - **Schema Management**: Keep `schema.sql` updated regularly with the latest schema changes.
 - **Types Management**: Keep `database.types.ts` updated regularly with the latest schema changes.
 - **Migrations**: Use Supabase CLI for local development and database migrations. Test all changes before staging/production.

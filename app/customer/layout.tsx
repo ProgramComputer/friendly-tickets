@@ -3,67 +3,57 @@
 import { CustomerNav } from "@/components/customer/customer-nav"
 import { CustomerUserNav } from "@/components/customer/customer-user-nav"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { authService } from "@/lib/auth/auth-service"
+import { authClient } from "@/lib/auth/auth-client"
 import { ROUTES } from "@/lib/constants/routes"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 
-export default function CustomerLayout({
-  children,
-}: {
+interface CustomerLayoutProps {
   children: React.ReactNode
-}) {
+}
+
+export default function CustomerLayout({ children }: CustomerLayoutProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const user = await authService.getCurrentUser()
-      if (!user || user.role !== "customer") {
+    async function checkAuth() {
+      const user = await authClient.getCurrentUser()
+      
+      if (!user) {
         router.push(ROUTES.auth.login)
         return
       }
+
+      if (user.role !== 'customer') {
+        router.push(ROUTES.role[user.role])
+        return
+      }
+
       setIsLoading(false)
     }
+
     checkAuth()
   }, [router])
 
   if (isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    )
+    return null // or a loading spinner
   }
 
   return (
-    <div className="flex min-h-screen">
-      {/* Sidebar */}
-      <aside className="w-64 border-r bg-background">
-        <div className="flex h-14 items-center border-b px-4">
-          <h2 className="text-lg font-semibold">AutoCRM</h2>
-        </div>
-        <CustomerNav />
-      </aside>
-
-      {/* Main content */}
-      <div className="flex flex-1 flex-col">
-        {/* Header */}
-        <header className="flex h-14 items-center justify-between border-b px-4">
-          <div className="flex items-center space-x-4">
-            <h1 className="text-lg font-semibold">Customer Dashboard</h1>
-          </div>
-          <div className="flex items-center space-x-2">
+    <div className="flex flex-col min-h-screen">
+      <header className="border-b">
+        <div className="flex h-16 items-center px-4">
+          <CustomerNav />
+          <div className="ml-auto flex items-center space-x-4">
             <ThemeToggle />
             <CustomerUserNav />
           </div>
-        </header>
-
-        {/* Content */}
-        <main className="flex-1 overflow-y-auto bg-background p-8">
-          {children}
-        </main>
-      </div>
+        </div>
+      </header>
+      <main className="flex-1 p-8">
+        {children}
+      </main>
     </div>
   )
 } 
