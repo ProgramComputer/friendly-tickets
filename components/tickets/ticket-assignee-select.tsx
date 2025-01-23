@@ -1,7 +1,9 @@
 "use client"
 
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase/client'
 import { useQuery } from "@tanstack/react-query"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createClient } from "@supabase/supabase-js"
 import {
   Select,
   SelectContent,
@@ -29,9 +31,10 @@ export function TicketAssigneeSelect({
   value,
   onValueChange,
 }: TicketAssigneeSelectProps) {
-  const supabase = createClientComponentClient()
+  const [agents, setAgents] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  const { data: teamMembers, isLoading } = useQuery({
+  const { data: teamMembers, isLoading: queryLoading } = useQuery({
     queryKey: ["team-members"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -47,7 +50,7 @@ export function TicketAssigneeSelect({
 
   const selectedMember = teamMembers?.find((m) => m.user_id === value)
 
-  if (isLoading) {
+  if (queryLoading) {
     return (
       <div className="flex h-10 items-center gap-2 rounded-md border px-3 text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" />

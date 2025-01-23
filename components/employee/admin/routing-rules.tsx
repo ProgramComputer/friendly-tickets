@@ -1,5 +1,7 @@
 "use client"
 
+import { useEffect } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -20,8 +22,71 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Slider } from "@/components/ui/slider"
 import { ArrowDownUp, BarChart3, Brain, Scale } from "lucide-react"
+import { getRoutingConfig, updateRoutingConfig } from "@/lib/supabase/domain/tickets/routing"
+import { toast } from "sonner"
 
 export function RoutingRules() {
+  const queryClient = useQueryClient()
+
+  const { data: config, isLoading } = useQuery({
+    queryKey: ['routing-config'],
+    queryFn: getRoutingConfig
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: updateRoutingConfig,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['routing-config'] })
+      toast.success('Routing configuration updated')
+    },
+    onError: (error) => {
+      console.error('Error updating routing config:', error)
+      toast.error('Failed to update routing configuration')
+    }
+  })
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="h-[600px] animate-pulse rounded-lg border bg-muted" />
+      </div>
+    )
+  }
+
+  const handleSmartRoutingChange = (enabled: boolean) => {
+    updateMutation.mutate({ smartRouting: enabled })
+  }
+
+  const handleWeightChange = (type: 'expertise' | 'workload' | 'response', value: number) => {
+    const update: Record<string, number> = {}
+    switch (type) {
+      case 'expertise':
+        update.expertiseWeight = value
+        break
+      case 'workload':
+        update.workloadWeight = value
+        break
+      case 'response':
+        update.responseTimeWeight = value
+        break
+    }
+    updateMutation.mutate(update)
+  }
+
+  const handleDistributionMethodChange = (value: string) => {
+    updateMutation.mutate({
+      distributionMethod: value as 'weighted' | 'least-loaded' | 'performance'
+    })
+  }
+
+  const handleAutoScalingChange = (enabled: boolean) => {
+    updateMutation.mutate({ autoScaling: enabled })
+  }
+
+  const handleMaxTicketsChange = (value: string) => {
+    updateMutation.mutate({ maxTicketsPerAgent: parseInt(value) })
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -46,7 +111,11 @@ export function RoutingRules() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label htmlFor="smart-routing">Enable Smart Routing</Label>
-                <Switch id="smart-routing" defaultChecked />
+                <Switch
+                  id="smart-routing"
+                  checked={config?.smartRouting}
+                  onCheckedChange={handleSmartRoutingChange}
+                />
               </div>
               <div className="grid gap-2">
                 <Label>Priority Factors</Label>
@@ -55,42 +124,45 @@ export function RoutingRules() {
                     <div className="space-y-0.5">
                       <div className="text-sm">Agent Expertise</div>
                       <div className="text-xs text-muted-foreground">
-                        Weight: 40%
+                        Weight: {config?.expertiseWeight}%
                       </div>
                     </div>
                     <Slider
-                      defaultValue={[40]}
+                      value={[config?.expertiseWeight || 0]}
                       max={100}
                       step={10}
                       className="w-[60%]"
+                      onValueChange={([value]) => handleWeightChange('expertise', value)}
                     />
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <div className="text-sm">Current Workload</div>
                       <div className="text-xs text-muted-foreground">
-                        Weight: 30%
+                        Weight: {config?.workloadWeight}%
                       </div>
                     </div>
                     <Slider
-                      defaultValue={[30]}
+                      value={[config?.workloadWeight || 0]}
                       max={100}
                       step={10}
                       className="w-[60%]"
+                      onValueChange={([value]) => handleWeightChange('workload', value)}
                     />
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <div className="text-sm">Response Time</div>
                       <div className="text-xs text-muted-foreground">
-                        Weight: 30%
+                        Weight: {config?.responseTimeWeight}%
                       </div>
                     </div>
                     <Slider
-                      defaultValue={[30]}
+                      value={[config?.responseTimeWeight || 0]}
                       max={100}
                       step={10}
                       className="w-[60%]"
+                      onValueChange={([value]) => handleWeightChange('response', value)}
                     />
                   </div>
                 </div>
@@ -113,7 +185,10 @@ export function RoutingRules() {
             <div className="space-y-4">
               <div className="grid gap-2">
                 <Label>Distribution Method</Label>
-                <Select defaultValue="weighted">
+                <Select
+                  value={config?.distributionMethod}
+                  onValueChange={handleDistributionMethodChange}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -126,11 +201,18 @@ export function RoutingRules() {
               </div>
               <div className="flex items-center justify-between">
                 <Label htmlFor="auto-scaling">Auto-scaling</Label>
-                <Switch id="auto-scaling" defaultChecked />
+                <Switch
+                  id="auto-scaling"
+                  checked={config?.autoScaling}
+                  onCheckedChange={handleAutoScalingChange}
+                />
               </div>
               <div className="grid gap-2">
                 <Label>Max Tickets Per Agent</Label>
-                <Select defaultValue="8">
+                <Select
+                  value={config?.maxTicketsPerAgent?.toString()}
+                  onValueChange={handleMaxTicketsChange}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>

@@ -35,7 +35,7 @@ export function DashboardNav() {
           },
           {
             title: "Tickets",
-            href: ROUTES.tickets.employee.list,
+            href: ROUTES.tickets.list,
             icon: Ticket,
           },
           {
@@ -58,7 +58,7 @@ export function DashboardNav() {
           },
           {
             title: "Tickets",
-            href: ROUTES.tickets.employee.list,
+            href: ROUTES.tickets.list,
             icon: Ticket,
           },
           {

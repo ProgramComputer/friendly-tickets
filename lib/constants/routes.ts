@@ -1,23 +1,21 @@
+import { UserRole } from '@/types/auth'
+
 export const ROUTES = {
   auth: {
-    login: "/auth/login",
-    signup: "/auth/signup",
+    login: '/auth/login',
+    signup: '/auth/signup',
+    forgotPassword: '/auth/forgot-password',
+    resetPassword: '/auth/reset-password',
   },
   role: {
-    admin: "/employee/admin",
-    agent: "/employee/agent",
-    customer: "/customer/tickets",
-  },
+    admin: '/admin/dashboard',
+    agent: '/tickets',
+    customer: '/tickets',
+  } as Record<UserRole, string>,
   tickets: {
-    employee: {
-      list: "/employee/tickets",
-      view: (id: string) => `/employee/tickets/${id}`,
-    },
-    customer: {
-      list: "/customer/tickets",
-      create: "/customer/tickets/create",
-      view: (id: string) => `/customer/tickets/${id}`,
-    },
+    list: '/tickets',
+    new: '/tickets/new',
+    view: (id: string) => `/tickets/${id}`,
   },
   team: {
     list: "/employee/team",

@@ -15,13 +15,13 @@ const navItems = [
   {
     id: "tickets",
     title: "My Tickets",
-    href: ROUTES.tickets.customer.list,
+    href: ROUTES.tickets.list,
     icon: Ticket,
   },
   {
     id: "support",
     title: "Support",
-    href: ROUTES.tickets.customer.create,
+    href: ROUTES.tickets.create,
     icon: MessageSquare,
   },
   {

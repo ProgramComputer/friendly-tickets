@@ -24,7 +24,7 @@
   - You must review the `projectContext.md` as we need to ensure that the project context is up to date and accurate.
   - **Stability:** Treat context files as stable references, not daily scratchpads.  
   - **Selective Updates:** Update context files only when there are significant, approved changes to requirements or project scope.  
-  - **Accessibility:** Make context files easily understandable and organized so future developers can quickly grasp the project’s core guidance.
+  - **Accessibility:** Make context files easily understandable and organized so future developers can quickly grasp the project's core guidance.
 
 - **Stack and Framework Conventions**
   - Target **Next.js 15+** and leverage the App Router, React Server Components (RSC), and SSR capabilities.
@@ -84,7 +84,7 @@ Below is a structured guideline to provide to the AI development agent, incorpor
 1. **Master Project Context (`projectContext.md`):**  
    - Located in `/ProjectDocs/contexts/`.  
    - Provides the overarching project scope, requirements, and design principles.  
-   - Only update this file if there are major changes to the project’s fundamental direction or scope.
+   - Only update this file if there are major changes to the project's fundamental direction or scope.
 
 2. **Additional Context Files:**  
    - Supplementary files (e.g., `uiContext.md`, `featureAContext.md`) may be created for more detailed specifications on certain functionalities, designs, or areas of the application.  
@@ -182,7 +182,7 @@ function formatInput({ input }: { input: string }) {
 ## Error Handling, Validation, and Services
 
 - Handle errors at the start of functions with guard clauses and early returns.
-- Keep the “happy path” visible at the bottom of the function.
+- Keep the "happy path" visible at the bottom of the function.
 - Avoid `else` statements by using if-return patterns to reduce nesting.
 - Use Zod for schema validation and form validation.
 - Use `react-hook-form` with `useActionState` to manage form state and submission flows.
@@ -223,7 +223,7 @@ function formatInput({ input }: { input: string }) {
 
 - Fetch latest Supabase documentation from https://supabase.com/docs/reference/javascript;
 
-- **Schema Management**: Keep `schema.sql` updated regularly with the latest schema changes.
+- **Schema Management**: Keep migrations folder under `supabase/migrations` updated with remote changes.
 - **Types Management**: Keep `database.types.ts` updated regularly with the latest schema changes.
 - **Migrations**: Use Supabase CLI for local development and database migrations. Test all changes before staging/production.
 - **RLS & RBAC**: Implement Row Level Security and role-based access control. Assign default roles in `handle_new_user` functions.
@@ -245,6 +245,252 @@ async function handleNewUser({ userId, email }: { userId: string; email: string 
   })
 }
 ```
+### Follow Supabase's guidelines for using the `@supabase/ssr` package and Server-Side Auth. Specifically, there should be:
+
+- A utility function to create a client on the client side
+- A utility function create a client on the server side, using the Next.js `cookies` API to access the cookies. Use the latest version of the API, where `cookies` must be awaited.
+- A utility function to handle refreshing the user session in middleware.
+
+## Working with cookies
+
+Use the latest version of `@supabase/ssr`, where cookie options are defined with the `getAll` and `setAll` functions, like so:
+
+```
+const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
+          supabaseResponse = NextResponse.next({
+            request,
+          })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          )
+        },
+      },
+    }
+  )
+```
+
+No other cookie options should be provided.
+
+## Middleware
+
+The middleware should use the following `updateSession` function:
+
+```
+import { createServerClient } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
+
+export async function updateSession(request: NextRequest) {
+  let supabaseResponse = NextResponse.next({
+    request,
+  })
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
+          supabaseResponse = NextResponse.next({
+            request,
+          })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          )
+        },
+      },
+    }
+  )
+
+  // IMPORTANT: Avoid writing any logic between createServerClient and
+  // supabase.auth.getUser(). A simple mistake could make it very hard to debug
+  // issues with users being randomly logged out.
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (
+    !user &&
+    !request.nextUrl.pathname.startsWith('/login') &&
+    !request.nextUrl.pathname.startsWith('/auth')
+  ) {
+    // no user, potentially respond by redirecting the user to the login page
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    return NextResponse.redirect(url)
+  }
+
+  // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
+  // creating a new response object with NextResponse.next() make sure to:
+  // 1. Pass the request in it, like so:
+  //    const myNewResponse = NextResponse.next({ request })
+  // 2. Copy over the cookies, like so:
+  //    myNewResponse.cookies.setAll(supabaseResponse.cookies.getAll())
+  // 3. Change the myNewResponse object to fit your needs, but avoid changing
+  //    the cookies!
+  // 4. Finally:
+  //    return myNewResponse
+  // If this is not done, you may be causing the browser and server to go out
+  // of sync and terminate the user's session prematurely!
+
+  return supabaseResponse
+}
+```
+### Postgres SQL Style Guide
+
+## General
+
+- Use lowercase for SQL reserved words to maintain consistency and readability.
+- Employ consistent, descriptive identifiers for tables, columns, and other database objects.
+- Use white space and indentation to enhance the readability of your code.
+- Store dates in ISO 8601 format (`yyyy-mm-ddThh:mm:ss.sssss`).
+- Include comments for complex logic, using '/* ... */' for block comments and '--' for line comments.
+
+## Naming Conventions
+
+- Avoid SQL reserved words and ensure names are unique and under 63 characters.
+- Use snake_case for tables and columns.
+- Prefer plurals for table names
+- Prefer singular names for columns.
+
+## Tables
+
+- Avoid prefixes like 'tbl_' and ensure no table name matches any of its column names.
+- Always add an `id` column of type `identity generated always` unless otherwise specified.
+- Create all tables in the `public` schema unless otherwise specified.
+- Always add the schema to SQL queries for clarity.
+- Always add a comment to describe what the table does. The comment can be up to 1024 characters.
+
+## Columns
+
+- Use singular names and avoid generic names like 'id'.
+- For references to foreign tables, use the singular of the table name with the `_id` suffix. For example `user_id` to reference the `users` table
+- Always use lowercase except in cases involving acronyms or when readability would be enhanced by an exception.
+
+#### Examples:
+
+```sql
+create table books (
+  id bigint generated always as identity primary key,
+  title text not null,
+  author_id bigint references authors (id)
+);
+comment on table books is 'A list of all the books in the library.';
+```
+
+
+## Queries
+
+- When the query is shorter keep it on just a few lines. As it gets larger start adding newlines for readability
+- Add spaces for readability.
+
+Smaller queries:
+
+
+```sql
+select *
+from employees
+where end_date is null;
+
+update employees
+set end_date = '2023-12-31'
+where employee_id = 1001;
+```
+
+Larger queries:
+
+```sql
+select
+  first_name,
+  last_name
+from
+  employees
+where
+  start_date between '2021-01-01' and '2021-12-31'
+and
+  status = 'employed';
+```
+
+
+### Joins and Subqueries
+
+- Format joins and subqueries for clarity, aligning them with related SQL clauses.
+- Prefer full table names when referencing tables. This helps for readability.
+
+```sql
+select
+  employees.employee_name,
+  departments.department_name
+from
+  employees
+join
+  departments on employees.department_id = departments.department_id
+where
+  employees.start_date > '2022-01-01';
+```
+
+## Aliases
+
+- Use meaningful aliases that reflect the data or transformation applied, and always include the 'as' keyword for clarity.
+
+```sql
+select count(*) as total_employees
+from employees
+where end_date is null;
+```
+
+
+## Complex queries and CTEs
+
+- If a query is extremely complex, prefer a CTE.
+- Make sure the CTE is clear and linear. Prefer readability over performance.
+- Add comments to each block.
+
+```sql
+with department_employees as (
+  -- Get all employees and their departments
+  select
+    employees.department_id,
+    employees.first_name,
+    employees.last_name,
+    departments.department_name
+  from
+    employees
+  join
+    departments on employees.department_id = departments.department_id
+),
+employee_counts as (
+  -- Count how many employees in each department
+  select
+    department_name,
+    count(*) as num_employees
+  from
+    department_employees
+  group by
+    department_name
+)
+select
+  department_name,
+  num_employees
+from
+  employee_counts
+order by
+  department_name;
+```
+
 
 ---
 
@@ -265,7 +511,7 @@ async function handleNewUser({ userId, email }: { userId: string; email: string 
 - **Supabase for Real-Time**: Use Supabase subscriptions for real-time data and SSR-friendly data access.
 - **Zustand**: Manage local state in isolated client components when needed.
 - **Vercel KV**: Use Vercel KV for chat history, rate limiting, and ephemeral storage.
-- **SSR & Minimize ‘use client’**: Prefer SSR and server actions. Only use `use client` for browser-based interactions.
+- **SSR & Minimize 'use client'**: Prefer SSR and server actions. Only use `use client` for browser-based interactions.
 
 ---
 
@@ -305,3 +551,71 @@ async function handleNewUser({ userId, email }: { userId: string; email: string 
 - Reuse components and keep them composable and testable.
 - Always test locally before pushing changes.
 - Ensure proper error handling, user-friendly messages, and accessible interfaces.
+
+## Supabase Migration Rules
+
+- **CRITICAL: Migration File Management**
+  - NEVER modify existing migration files. Each change requires a new migration file with a fresh timestamp.
+  - Use `npx supabase migration new <descriptive-name>` to create new migrations.
+  - Keep migration names short but descriptive (e.g., `add-user-index`, `update-ticket-constraints`).
+  - One logical change per migration file - don't combine unrelated schema changes.
+  - Test migrations locally before pushing to production.
+
+- **Migration Best Practices**
+  - Include `drop if exists` statements to make migrations idempotent.
+  - Add comments explaining the purpose of each migration.
+  - For constraint changes, include both `drop constraint if exists` and `add constraint`.
+  - Order operations correctly (e.g., drop dependent objects before their dependencies).
+  - Always specify the schema (e.g., `public.users` instead of just `users`).
+
+- **Schema Management**
+  - Keep `supabase/migrations/` in sync with remote changes.
+  - Document schema changes in both migration files and project documentation.
+  - Use `npx supabase db reset` for local development only.
+  - Use `npx supabase db push` for remote database updates.
+  - Never use `db reset` on production/remote databases.
+
+- **Types and Validation**
+  - Generate and commit TypeScript types after schema changes using `supabase gen types typescript`.
+  - Use Zod schemas that match database constraints.
+  - Keep `database.types.ts` updated with latest schema.
+
+- **Security and Access Control**
+  - Document RLS policies in both migrations and project documentation.
+  - Test RLS policies with different user roles.
+  - Use service role only for administrative tasks (seeding, migrations).
+  - Never expose service role key in client-side code.
+
+## Database Standards
+
+- **Naming Conventions**
+  - Use snake_case for all database objects (tables, columns, functions).
+  - Prefix function names with verb (e.g., `get_user`, `update_status`).
+  - Use plural for table names (e.g., `users`, `tickets`).
+  - Use singular for column names and foreign keys (e.g., `user_id`).
+
+- **Column Standards**
+  - Include `created_at` and `updated_at` on all tables.
+  - Use `uuid` for primary keys unless there's a specific reason not to.
+  - Add appropriate indexes for foreign keys and frequently queried columns.
+  - Document constraints and indexes in migration files.
+
+- **Error Handling**
+  - Use custom error codes for database functions.
+  - Implement proper error handling in application code.
+  - Log database errors appropriately.
+  - Provide user-friendly error messages.
+
+## Testing and Validation
+
+- **Migration Testing**
+  - Test migrations in both directions (up/down).
+  - Verify data integrity after migrations.
+  - Test with realistic data volumes.
+  - Check performance impact of schema changes.
+
+- **Data Seeding**
+  - Keep seed data minimal but sufficient for testing.
+  - Use service role for seeding operations.
+  - Document seed data structure and purpose.
+  - Include different test scenarios in seed data.

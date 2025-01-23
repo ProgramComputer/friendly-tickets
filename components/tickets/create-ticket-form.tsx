@@ -2,7 +2,6 @@
 
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { z } from "zod"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -20,25 +19,42 @@ import { Textarea } from "@/components/ui/textarea"
 import { TicketPrioritySelect } from "./ticket-priority-select"
 import { TicketCategorySelect } from "./ticket-category-select"
 import { TicketAssigneeSelect } from "./ticket-assignee-select"
-import { supabase } from "@/lib/supabase/client"
-import { useToast } from "@/components/ui/use-toast"
-import { ROUTES } from "@/lib/constants/routes"
+import { TicketTemplateSelect } from "./ticket-template-select"
+import { TicketTagSelect } from "./ticket-tag-select"
+import { TicketDepartmentSelect } from "./ticket-department-select"
+import { TicketSLASelect } from "./ticket-sla-select"
+import { CustomFieldsForm } from "./custom-fields-form"
+import { WatchersInput } from "./watchers-input"
+import { RoleGate } from "@/components/auth/role-gate"
+import { createClient } from "@/lib/supabase/client"
+import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/lib/hooks/use-auth"
+import {
+  createCustomerTicketSchema,
+  createAgentTicketSchema,
+  createAdminTicketSchema,
+  type CreateCustomerTicketInput,
+  type CreateAgentTicketInput,
+  type CreateAdminTicketInput,
+} from "@/lib/schemas/ticket"
 
-const ticketFormSchema = z.object({
-  title: z
-    .string()
-    .min(5, "Title must be at least 5 characters")
-    .max(100, "Title must not exceed 100 characters"),
-  description: z
-    .string()
-    .min(20, "Description must be at least 20 characters")
-    .max(2000, "Description must not exceed 2000 characters"),
-  priority: z.enum(["low", "medium", "high", "urgent"]),
-  category: z.string().min(1, "Please select a category"),
-  assignee_id: z.string().uuid().optional(),
-})
+type UserRole = "customer" | "agent" | "admin"
 
-type TicketFormValues = z.infer<typeof ticketFormSchema>
+// Get the appropriate schema based on user role
+function getSchemaForRole(role: UserRole) {
+  switch (role) {
+    case "customer":
+      return createCustomerTicketSchema
+    case "agent":
+      return createAgentTicketSchema
+    case "admin":
+      return createAdminTicketSchema
+    default:
+      return createCustomerTicketSchema
+  }
+}
+
+type TicketFormValues = CreateCustomerTicketInput | CreateAgentTicketInput | CreateAdminTicketInput
 
 const defaultValues: Partial<TicketFormValues> = {
   priority: "medium",
@@ -47,49 +63,51 @@ const defaultValues: Partial<TicketFormValues> = {
 export function CreateTicketForm() {
   const router = useRouter()
   const { toast } = useToast()
+  const { user, role, isLoading } = useAuth()
 
   const form = useForm<TicketFormValues>({
-    resolver: zodResolver(ticketFormSchema),
+    resolver: zodResolver(getSchemaForRole(role as UserRole)),
     defaultValues,
   })
 
   async function onSubmit(data: TicketFormValues) {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) throw new Error("Not authenticated")
-
-      const { data: ticket, error } = await supabase
-        .from("tickets")
-        .insert({
-          title: data.title,
-          description: data.description,
-          priority: data.priority,
-          category: data.category,
-          assignee_id: data.assignee_id,
-          customer_id: user.id,
-        })
-        .select()
-        .single()
-
-      if (error) throw error
-
-      toast({
-        title: "Ticket created",
-        description: "Your ticket has been created successfully.",
+      const response = await fetch("/api/tickets", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          role,
+          data,
+        }),
       })
 
-      router.push(ROUTES.tickets.customer.view(ticket.id))
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message)
+      }
+
+      const result = await response.json()
+      
+      toast({
+        title: "Success",
+        description: "Ticket created successfully",
+      })
+
+      router.push(`/tickets/${result.data.id}`)
       router.refresh()
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to create ticket. Please try again.",
+        description: error.message || "Failed to create ticket",
         variant: "destructive",
       })
     }
+  }
+
+  if (isLoading) {
+    return <div>Loading...</div>
   }
 
   return (
@@ -133,64 +151,151 @@ export function CreateTicketForm() {
           )}
         />
 
-        <div className="grid gap-6 md:grid-cols-2">
-          <FormField
-            control={form.control}
-            name="priority"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Priority</FormLabel>
-                <FormControl>
-                  <TicketPrioritySelect
-                    value={field.value}
-                    onValueChange={field.onChange}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="category"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Category</FormLabel>
-                <FormControl>
-                  <TicketCategorySelect
-                    value={field.value}
-                    onValueChange={field.onChange}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
         <FormField
           control={form.control}
-          name="assignee_id"
+          name="categoryId"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Assignee</FormLabel>
+              <FormLabel>Category</FormLabel>
               <FormControl>
-                <TicketAssigneeSelect
+                <TicketCategorySelect
                   value={field.value}
                   onValueChange={field.onChange}
                 />
               </FormControl>
-              <FormDescription>
-                Optional: Assign this ticket to a specific agent
-              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
         />
 
+        <FormField
+          control={form.control}
+          name="priority"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Priority</FormLabel>
+              <FormControl>
+                <TicketPrioritySelect
+                  value={field.value}
+                  onValueChange={field.onChange}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <RoleGate allowedRoles={["agent", "admin"]} requireFeature="edit_tickets">
+          <div className="grid gap-6 md:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="departmentId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Department</FormLabel>
+                  <FormControl>
+                    <TicketDepartmentSelect
+                      value={field.value}
+                      onValueChange={field.onChange}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <FormField
+            control={form.control}
+            name="assignedToId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Assignee</FormLabel>
+                <FormControl>
+                  <TicketAssigneeSelect
+                    value={field.value}
+                    onValueChange={field.onChange}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Assign this ticket to a specific agent
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="tags"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Tags</FormLabel>
+                <FormControl>
+                  <TicketTagSelect
+                    value={field.value || []}
+                    onValueChange={field.onChange}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </RoleGate>
+
+        <RoleGate requireFeature="manage_templates">
+          <FormField
+            control={form.control}
+            name="templateId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Template</FormLabel>
+                <FormControl>
+                  <TicketTemplateSelect
+                    value={field.value}
+                    onValueChange={field.onChange}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </RoleGate>
+
+        <RoleGate requireFeature="manage_sla">
+          <FormField
+            control={form.control}
+            name="slaId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>SLA Policy</FormLabel>
+                <FormControl>
+                  <TicketSLASelect
+                    value={field.value}
+                    onValueChange={field.onChange}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </RoleGate>
+
+        <RoleGate requireFeature="edit_tickets">
+          <CustomFieldsForm
+            control={form.control}
+            name="customFields"
+          />
+        </RoleGate>
+
+        <WatchersInput
+          control={form.control}
+          ccName="cc"
+          bccName="bcc"
+        />
+
         <div className="flex justify-end gap-4">
-          <Button type="button" variant="outline">
+          <Button type="button" variant="outline" onClick={() => router.back()}>
             Cancel
           </Button>
           <Button type="submit" disabled={form.formState.isSubmitting}>

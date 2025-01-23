@@ -11,17 +11,12 @@ export interface AuthResult {
   redirectTo?: string
 }
 
-async function getSupabaseClient() {
-  const cookieStore = cookies()
-  return createClient(cookieStore)
-}
-
 async function signIn({ email, password }: { 
   email: string
   password: string
 }): Promise<AuthResult> {
   try {
-    const supabase = await getSupabaseClient()
+    const supabase = await createClient()
 
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
@@ -30,49 +25,49 @@ async function signIn({ email, password }: {
 
     if (authError) throw authError
 
-    // Determine role based on email domain
-    const role = email.endsWith('@admin.autocrm.com')
-      ? 'admin'
-      : email.endsWith('@agent.autocrm.com')
-        ? 'agent'
-        : 'customer'
+    // First check if user is a team member
+    const { data: teamMember } = await supabase
+      .from('team_members')
+      .select()
+      .eq('user_id', authData.user.id)
+      .single()
 
-    // Check if user exists in team_members or customers table based on role
-    if (role === "customer") {
-      const { data: customer, error: customerError } = await supabase
-        .from("customers")
-        .select()
-        .eq("user_id", authData.user.id)
-        .single()
-
-      if (customerError || !customer) {
-        await supabase.auth.signOut()
-        return {
-          success: false,
-          error: "Invalid customer account"
-        }
+    if (teamMember) {
+      return {
+        success: true,
+        redirectTo: ROUTES.role[teamMember.role]
       }
-    } else {
-      // For admin and agent roles
-      const { data: teamMember, error: teamMemberError } = await supabase
-        .from("team_members")
-        .select()
-        .eq("user_id", authData.user.id)
-        .eq("role", role)
-        .single()
+    }
 
-      if (teamMemberError || !teamMember) {
+    // If not a team member, check/create customer record
+    const { data: customer, error: customerError } = await supabase
+      .from('customers')
+      .select()
+      .eq('user_id', authData.user.id)
+      .single()
+
+    if (customerError || !customer) {
+      // For new customers, create a customer record
+      const { error: createError } = await supabase
+        .from('customers')
+        .insert({
+          user_id: authData.user.id,
+          email: email,
+          name: email.split('@')[0], // Use email prefix as initial name
+        })
+
+      if (createError) {
         await supabase.auth.signOut()
         return {
           success: false,
-          error: "Invalid role for this user"
+          error: "Failed to create customer profile"
         }
       }
     }
 
-    return { 
+    return {
       success: true,
-      redirectTo: ROUTES.role[role]
+      redirectTo: ROUTES.role.customer
     }
   } catch (error) {
     return {
@@ -84,7 +79,7 @@ async function signIn({ email, password }: {
 
 async function signOut(): Promise<AuthResult> {
   try {
-    const supabase = await getSupabaseClient()
+    const supabase = await createClient()
     const { error } = await supabase.auth.signOut()
     if (error) throw error
     return { success: true, redirectTo: ROUTES.auth.login }
@@ -98,17 +93,15 @@ async function signOut(): Promise<AuthResult> {
 
 async function getCurrentUser() {
   try {
-    const supabase = await getSupabaseClient()
+    const supabase = await createClient()
     const { data: { user }, error } = await supabase.auth.getUser()
-    if (error) throw error
-    
-    if (!user) return null
+    if (error || !user) return null
 
-    // Check team_members first
+    // First check team members
     const { data: teamMember } = await supabase
-      .from("team_members")
+      .from('team_members')
       .select()
-      .eq("user_id", user.id)
+      .eq('user_id', user.id)
       .single()
 
     if (teamMember) {
@@ -119,24 +112,24 @@ async function getCurrentUser() {
       }
     }
 
-    // If not a team member, check customers
+    // Then check customers
     const { data: customer } = await supabase
-      .from("customers")
+      .from('customers')
       .select()
-      .eq("user_id", user.id)
+      .eq('user_id', user.id)
       .single()
 
     if (customer) {
       return {
         ...user,
-        role: "customer" as UserRole,
+        role: 'customer' as UserRole,
         name: customer.name,
       }
     }
 
     return null
   } catch (error) {
-    console.error("Error getting current user:", error)
+    console.error('Error getting current user:', error)
     return null
   }
 }
@@ -155,10 +148,15 @@ async function getDefaultRoute(role: UserRole): Promise<string> {
 }
 
 export const authService = {
-  async getSupabase() {
-    const cookieStore = await cookies()
-    return createClient(cookieStore)
-  },
+  signIn,
+  signOut,
+  getCurrentUser,
+  isAuthorized,
+  getDefaultRoute,
+}
+
+// Export individual functions for server actions
+export {
   signIn,
   signOut,
   getCurrentUser,

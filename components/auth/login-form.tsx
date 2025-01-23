@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
-import { login } from "@/app/auth/login/actions"
+import { supabase } from "@/lib/supabase/client"
 
 export function LoginForm() {
   const router = useRouter()
@@ -15,17 +15,38 @@ export function LoginForm() {
     setIsLoading(true)
 
     try {
-      const result = await login(formData)
-      
-      if (!result.success) {
-        throw new Error(result.error)
+      const email = formData.get('email') as string
+      const password = formData.get('password') as string
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (error) throw error
+
+      // Check role based on email domain
+      const role = email.endsWith('@admin.autocrm.com')
+        ? 'admin'
+        : email.endsWith('@agent.autocrm.com')
+          ? 'agent'
+          : 'customer'
+
+      // Verify role in database
+      const { data: profile, error: profileError } = await supabase
+        .from(role === 'customer' ? 'customers' : 'team_members')
+        .select('*')
+        .eq('user_id', data.user.id)
+        .single()
+
+      if (profileError || !profile) {
+        await supabase.auth.signOut()
+        throw new Error('Invalid account type')
       }
 
       toast.success("Logged in successfully")
-      
-      if (result.redirectTo) {
-        router.push(result.redirectTo)
-      }
+      router.push(role === 'customer' ? '/tickets' : `/dashboard/${role}`)
+      router.refresh()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Invalid credentials")
     } finally {
