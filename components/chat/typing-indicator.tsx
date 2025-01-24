@@ -1,23 +1,29 @@
-import { cn } from '@/lib/utils'
+'use client'
 
-interface TypingIndicatorProps {
-  className?: string
-}
+import { motion } from 'framer-motion'
 
-export function TypingIndicator({ className }: TypingIndicatorProps) {
+export function TypingIndicator() {
   return (
-    <div
-      className={cn(
-        'flex items-center gap-1 text-muted-foreground',
-        className
-      )}
-    >
-      <div className="flex gap-1">
-        <div className="h-2 w-2 animate-bounce rounded-full bg-current [animation-delay:-0.3s]" />
-        <div className="h-2 w-2 animate-bounce rounded-full bg-current [animation-delay:-0.15s]" />
-        <div className="h-2 w-2 animate-bounce rounded-full bg-current" />
+    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+      <span>typing</span>
+      <div className="flex gap-0.5">
+        {[0, 1, 2].map((i) => (
+          <motion.span
+            key={i}
+            initial={{ opacity: 0.5, y: 0 }}
+            animate={{ opacity: 1, y: -2 }}
+            transition={{
+              repeat: Infinity,
+              repeatType: 'reverse',
+              duration: 0.4,
+              delay: i * 0.1,
+            }}
+            className="inline-block"
+          >
+            .
+          </motion.span>
+        ))}
       </div>
-      <span className="text-xs">typing</span>
     </div>
   )
 } 

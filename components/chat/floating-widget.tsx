@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useSupabase } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
+import { startChatSession } from '@/lib/services/chat-session'
+import { useToast } from '@/hooks/use-toast'
 
 interface FloatingWidgetProps {
   position?: 'bottom-right' | 'bottom-left'
@@ -23,8 +25,10 @@ export function FloatingWidget({
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [message, setMessage] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
   const { session } = useSupabase()
   const { messages, sendMessage } = useChat()
+  const { toast } = useToast()
 
   // Handle new messages when minimized
   const [unreadCount, setUnreadCount] = useState(0)
@@ -43,11 +47,47 @@ export function FloatingWidget({
 
   // Handle pre-chat form submission
   const handleStartChat = async () => {
-    if (!name || !email || !message) return
+    if (!name || !email || !message || isLoading) return
 
-    // TODO: Create chat session and send initial message
-    setIsPreChatFormComplete(true)
-    sendMessage(message, 'agent-queue') // Replace with actual agent ID or queue
+    try {
+      setIsLoading(true)
+
+      // Get or create customer profile
+      const { data: customer, error: customerError } = await supabase
+        .from('customers')
+        .upsert({
+          user_id: session?.user?.id,
+          name,
+          email,
+        })
+        .select()
+        .single()
+
+      if (customerError) throw customerError
+
+      // Start chat session
+      const chatSession = await startChatSession({
+        customerId: customer.id,
+        name,
+        email,
+        initialMessage: message,
+      })
+
+      setIsPreChatFormComplete(true)
+      toast({
+        title: 'Chat started',
+        description: 'An agent will be with you shortly.',
+      })
+    } catch (error) {
+      console.error('Error starting chat:', error)
+      toast({
+        title: 'Error starting chat',
+        description: 'Please try again later.',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -128,25 +168,28 @@ export function FloatingWidget({
                       placeholder="Your name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
+                      disabled={isLoading}
                     />
                     <Input
                       type="email"
                       placeholder="Email address"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
+                      disabled={isLoading}
                     />
                     <Textarea
                       placeholder="How can we help?"
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
                       className="min-h-[100px]"
+                      disabled={isLoading}
                     />
                     <Button
                       className="w-full"
                       onClick={handleStartChat}
-                      disabled={!name || !email || !message}
+                      disabled={!name || !email || !message || isLoading}
                     >
-                      Start Chat
+                      {isLoading ? 'Starting chat...' : 'Start Chat'}
                     </Button>
                   </div>
 

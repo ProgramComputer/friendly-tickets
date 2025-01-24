@@ -1,9 +1,50 @@
 import { chromium, Page } from 'playwright'
 import * as fs from 'fs'
 import * as path from 'path'
+import { ROUTES } from '@/lib/constants/routes'
 
 type UserRole = 'customer' | 'agent' | 'admin'
-type TestPage = 'ticket-list' | 'ticket-creation' | 'ticket-detail' | 'profile'
+
+// Define role-specific pages
+const ROLE_ROUTES = {
+  customer: {
+    'tickets': ROUTES.dashboard.tickets,
+    'settings': ROUTES.dashboard.settings,
+    'kb': ROUTES.kb.home,
+    'kb-articles': ROUTES.kb.articles,
+    'kb-categories': ROUTES.kb.categories,
+  },
+  agent: {
+    'queue': ROUTES.agent.queue,
+    'templates': ROUTES.agent.templates,
+    'workspace': ROUTES.agent.workspace,
+    'kb': ROUTES.kb.home,
+    'kb-articles': ROUTES.kb.articles,
+    'kb-categories': ROUTES.kb.categories,
+  },
+  admin: {
+    'departments': ROUTES.admin.departments,
+    'reports': ROUTES.admin.reports,
+    'team': ROUTES.admin.team,
+    'settings': ROUTES.admin.settings,
+    'kb': ROUTES.kb.home,
+    'kb-articles': ROUTES.kb.articles,
+    'kb-categories': ROUTES.kb.categories,
+  }
+} as const
+
+type RoleSpecificPages<R extends UserRole> = keyof typeof ROLE_ROUTES[R]
+
+// Function to get the full path for a page based on role
+function getPagePath<R extends UserRole>(role: R, page: RoleSpecificPages<R>): string {
+  return ROLE_ROUTES[role][page] as string
+}
+
+const ROLE_ALLOWED_PAGES = {
+  customer: ['tickets',  'settings', 'kb', 'kb-articles', 'kb-categories'] as const,
+  agent: ['queue', 'templates', 'workspace', 'kb', 'kb-articles', 'kb-categories'] as const,
+  admin: ['departments', 'reports', 'team', 'settings', 'kb', 'kb-articles', 'kb-categories'] as const
+} satisfies { [K in UserRole]: ReadonlyArray<RoleSpecificPages<K>> }
 
 const TEST_USERS = {
   customer: {
@@ -19,20 +60,13 @@ const TEST_USERS = {
   admin: {
     email: 'jack@admin.autocrm.com',
     password: 'fakeaccount',
-    name: 'Admin User'
+    name: 'Jack Admin'
   }
-} as const
-
-const TEST_PAGES: Record<TestPage, string> = {
-  'ticket-list': '/tickets',
-  'ticket-creation': '/tickets/new',
-  'ticket-detail': '/tickets/1',
-  'profile': '/profile'
 } as const
 
 interface ScreenshotOptions {
   role?: UserRole
-  pages?: TestPage[]
+  pages?: RoleSpecificPages<UserRole>[]
   viewports?: ('mobile' | 'tablet' | 'desktop')[]
 }
 
@@ -57,11 +91,18 @@ interface ScreenshotAnalysis {
     imageSize: number
   }
   consoleLogs: string[]
+  failedRequests: {
+    url: string
+    status: number
+    statusText: string
+    error?: string
+  }[]
   roleSpecificElements: {
     hasInternalNotes: boolean
     hasAdminControls: boolean
     hasAssignmentOptions: boolean
   }
+  htmlDom: string
 }
 
 async function cleanupScreenshots() {
@@ -84,6 +125,17 @@ async function analyzeScreenshot(
 ): Promise<ScreenshotAnalysis> {
   const dimensions = page.viewportSize()!
   const consoleLogs: string[] = []
+  const failedRequests: ScreenshotAnalysis['failedRequests'] = []
+
+  page.on('requestfailed', async request => {
+    const response = await request.response()
+    failedRequests.push({
+      url: request.url(),
+      status: response?.status() ?? 0,
+      statusText: response?.statusText() ?? 'Unknown',
+      error: request.failure()?.errorText
+    })
+  })
 
   page.on('console', msg => {
     consoleLogs.push(`${msg.type()}: ${msg.text()}`)
@@ -111,7 +163,8 @@ async function analyzeScreenshot(
         hasInternalNotes: !!document.querySelector('[data-testid="internal-notes"]'),
         hasAdminControls: !!document.querySelector('[data-testid="admin-controls"]'),
         hasAssignmentOptions: !!document.querySelector('[data-testid="assignment-options"]')
-      }
+      },
+      htmlDom: document.documentElement.outerHTML
     }
   })
 
@@ -120,7 +173,8 @@ async function analyzeScreenshot(
     viewport,
     dimensions,
     ...analysis,
-    consoleLogs
+    consoleLogs,
+    failedRequests
   }
 }
 
@@ -128,29 +182,52 @@ async function signIn(page: Page, role: UserRole = 'customer') {
   const user = TEST_USERS[role]
   process.stdout.write('Stage: Authenticating... ')
   
-  try {
-  await page.goto('http://localhost:3000/auth/login')
-  await page.waitForSelector('input[name="email"]', { timeout: 60000 })
-  await page.waitForSelector('input[name="password"]', { timeout: 60000 })
-  await page.fill('input[name="email"]', user.email)
-  await page.fill('input[name="password"]', user.password)
-  
-    await Promise.all([
-      page.click('button[type="submit"]'),
-      page.waitForResponse(
-        response => response.url().includes('supabase.co/auth/v1/token'),
-        { timeout: 60000 }
-      ),
-      page.waitForSelector('[role="status"]', { timeout: 60000 }),
-      page.waitForNavigation({ 
+  const maxRetries = 3
+  let retryCount = 0
+
+  while (retryCount < maxRetries) {
+    try {
+      // Navigate to login page and wait for it to be ready
+      await page.goto('http://localhost:3000/login', {
         waitUntil: 'networkidle',
-        timeout: 60000 
+        timeout: 30000
       })
-    ])
-    process.stdout.write('✓\n')
-  } catch (error) {
-    process.stdout.write('✗\n')
-    throw error
+
+      // Wait for and fill email field
+      await page.waitForSelector('input[name="email"]', { timeout: 30000 })
+      await page.fill('input[name="email"]', user.email)
+      await page.waitForTimeout(500) // Small delay between fields
+
+      // Wait for and fill password field
+      await page.waitForSelector('input[name="password"]', { timeout: 30000 })
+      await page.fill('input[name="password"]', user.password)
+      await page.waitForTimeout(500) // Small delay before submit
+
+      // Submit and wait for navigation
+      await Promise.all([
+        page.click('button[type="submit"]'),
+        page.waitForResponse(
+          response => response.url().includes('supabase.co/auth/v1/token'),
+          { timeout: 30000 }
+        ),
+        page.waitForSelector('[role="status"]', { timeout: 30000 }),
+        page.waitForNavigation({ 
+          waitUntil: 'networkidle',
+          timeout: 30000 
+        })
+      ])
+
+      process.stdout.write('✓\n')
+      return
+    } catch (error) {
+      retryCount++
+      if (retryCount === maxRetries) {
+        process.stdout.write('✗\n')
+        throw new Error(`Failed to sign in after ${maxRetries} attempts: ${error}`)
+      }
+      process.stdout.write('retrying... ')
+      await page.waitForTimeout(2000) // Wait before retry
+    }
   }
 }
 
@@ -174,18 +251,35 @@ async function waitForContent(page: Page) {
   }
 }
 
-async function captureAndAnalyzeScreenshots(options: ScreenshotOptions = {}) {
-  const {
-    role = 'customer',
-    pages = Object.keys(TEST_PAGES) as TestPage[],
-    viewports = ['desktop']
-  } = options
+async function logout(page: Page) {
+  process.stdout.write('Stage: Logging out... ')
+  try {
+    // Clear cookies and storage
+    const context = page.context()
+    await context.clearCookies()
+    await page.evaluate(() => {
+      localStorage.clear()
+      sessionStorage.clear()
+    })
+    
+    // Navigate to home and verify logged out state
+    await page.goto('http://localhost:3000', {
+      waitUntil: 'networkidle',
+      timeout: 30000
+    })
+    
+    process.stdout.write('✓\n')
+  } catch (error) {
+    process.stdout.write('✗\n')
+    console.error('Error during logout:', error)
+  }
+}
 
-  await cleanupScreenshots()
-  
-  const tmpDir = path.join(process.cwd(), '.screenshots-tmp', Date.now().toString())
-  fs.mkdirSync(tmpDir, { recursive: true })
-
+async function captureRoleScreenshots(
+  role: UserRole,
+  tmpDir: string,
+  viewports: ('mobile' | 'tablet' | 'desktop')[]
+) {
   const browser = await chromium.launch({
     headless: true,
   })
@@ -205,26 +299,25 @@ async function captureAndAnalyzeScreenshots(options: ScreenshotOptions = {}) {
     await signIn(page, role)
 
     const analysis: { [key: string]: ScreenshotAnalysis } = {}
+    const pages = ROLE_ALLOWED_PAGES[role]
 
     for (const pageName of pages) {
       process.stdout.write(`Stage: Processing ${pageName}... `)
 
       try {
-        await page.goto(`http://localhost:3000${TEST_PAGES[pageName]}`, { waitUntil: 'networkidle' })
-      await waitForContent(page)
+        await page.goto(`http://localhost:3000${getPagePath(role, pageName as RoleSpecificPages<UserRole>)}`, { waitUntil: 'networkidle' })
+        await waitForContent(page)
 
-      for (const viewport of viewports) {
-        await page.setViewportSize(viewportSizes[viewport])
-          await page.waitForTimeout(1000) // Wait for any responsive adjustments
-        
-        // Capture screenshot
-        const screenshotPath = path.join(tmpDir, `${pageName}-${viewport}.png`)
+        for (const viewport of viewports) {
+          await page.setViewportSize(viewportSizes[viewport])
+          await page.waitForTimeout(1000)
+
+          const screenshotPath = path.join(tmpDir, `${role}-${pageName}-${viewport}.png`)
           await page.screenshot({ 
             path: screenshotPath,
             fullPage: true 
           })
-          
-          // Capture state
+
           const state = await page.evaluate(() => ({
             url: window.location.href,
             title: document.title,
@@ -263,14 +356,13 @@ async function captureAndAnalyzeScreenshots(options: ScreenshotOptions = {}) {
               })),
             })),
           }))
-          
+
           fs.writeFileSync(
-            path.join(tmpDir, `${pageName}-${viewport}-state.json`),
+            path.join(tmpDir, `${role}-${pageName}-${viewport}-state.json`),
             JSON.stringify(state, null, 2)
           )
-          
-          // Analyze screenshot
-          analysis[`${pageName}-${viewport}`] = await analyzeScreenshot(page, pageName, viewport, role)
+
+          analysis[`${role}-${pageName}-${viewport}`] = await analyzeScreenshot(page, pageName, viewport, role)
         }
         process.stdout.write('✓\n')
       } catch (error) {
@@ -280,15 +372,39 @@ async function captureAndAnalyzeScreenshots(options: ScreenshotOptions = {}) {
     }
 
     fs.writeFileSync(
-      path.join(tmpDir, 'analysis.json'),
+      path.join(tmpDir, `${role}-analysis.json`),
       JSON.stringify(analysis, null, 2)
     )
 
-    process.stdout.write('Stage: Complete ✓\n')
-
+    await logout(page)
   } finally {
     await browser.close()
   }
+}
+
+async function captureAndAnalyzeScreenshots(options: ScreenshotOptions = {}) {
+  const {
+    viewports = ['desktop']
+  } = options
+
+  await cleanupScreenshots()
+  
+  const tmpDir = path.join(process.cwd(), '.screenshots-tmp', Date.now().toString())
+  fs.mkdirSync(tmpDir, { recursive: true })
+  
+  console.log(`\nScreenshots will be saved to: ${tmpDir}\n`)
+
+  // Process each role sequentially
+  const roles: UserRole[] = ['customer', 'agent', 'admin']
+  
+  for (const role of roles) {
+    console.log(`\nProcessing role: ${role}`)
+    await captureRoleScreenshots(role, tmpDir, viewports)
+    // Add delay between roles to ensure clean state
+    await new Promise(resolve => setTimeout(resolve, 2000))
+  }
+
+  process.stdout.write('Stage: Complete ✓\n')
 }
 
 // Parse command line arguments
@@ -310,11 +426,11 @@ if (roleArg) {
 // Parse pages
 const pagesArg = args.find(arg => arg.startsWith('--pages='))
 if (pagesArg) {
-  const pages = pagesArg.split('=')?.[1]?.split(',') as TestPage[]
-  if (pages.every(page => page in TEST_PAGES)) {
+  const pages = pagesArg.split('=')?.[1]?.split(',') as RoleSpecificPages<UserRole>[]
+  if (pages.every(page => page in ROLE_ROUTES[options.role!])) {
     options.pages = pages
   } else {
-    console.error(`Invalid pages. Available pages: ${Object.keys(TEST_PAGES).join(', ')}`)
+    console.error(`Invalid pages. Available pages: ${Object.keys(ROLE_ROUTES[options.role!]).join(', ')}`)
     process.exit(1)
   }
 }

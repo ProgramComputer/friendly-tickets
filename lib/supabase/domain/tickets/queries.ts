@@ -16,41 +16,60 @@ import type {
 export async function getTickets({
   cursor,
   limit = 10,
-  sort,
+  sort = { field: 'created_at', direction: 'desc' },
   filters,
 }: TicketListParams): Promise<TicketListResponse> {
+  // Get current user
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  // First check if user is a customer by joining through user_id
+  const { data: customer } = await supabase
+    .from('customers')
+    .select('id, user_id')
+    .eq('user_id', user.id)
+    .maybeSingle()
+
   let query = supabase
     .from('tickets')
     .select(`
       *,
       customer:customers!customer_id(*),
       assignee:team_members!assignee_id(*),
+      department:departments!department_id(*),
       messages:ticket_messages(count)
     `)
 
-  // Apply filters
-  if (filters.status?.length) {
+  // If user is a customer, filter by customer.id (not user_id)
+  if (customer) {
+    query = query.eq('customer_id', customer.id)
+  }
+
+  // Only apply filters if they have values
+  if (filters?.status?.length > 0) {
     query = query.in('status', filters.status)
   }
 
-  if (filters.priority?.length) {
+  if (filters?.priority?.length > 0) {
     query = query.in('priority', filters.priority)
   }
 
-  if (filters.dateRange) {
+  if (filters?.dateRange?.from && filters?.dateRange?.to) {
     query = query
-      .gte('created_at', filters.dateRange.start.toISOString())
-      .lte('created_at', filters.dateRange.end.toISOString())
+      .gte('created_at', filters.dateRange.from.toISOString())
+      .lte('created_at', filters.dateRange.to.toISOString())
   }
 
-  if (filters.search) {
+  if (filters?.search) {
     query = query.textSearch('title', filters.search)
   }
 
-  // Apply sorting
-  query = query.order(sort.field, {
-    ascending: sort.direction === 'asc',
-  })
+  // Apply sorting if sort field exists
+  if (sort?.field) {
+    query = query.order(sort.field, {
+      ascending: sort.direction === 'asc',
+    })
+  }
 
   // Apply pagination
   if (cursor) {
@@ -83,7 +102,12 @@ export async function getTicketById(id: string): Promise<Ticket> {
       *,
       customer:customers!customer_id(*),
       assignee:team_members!assignee_id(*),
-      messages:ticket_messages(*)
+      department:departments!department_id(*),
+      messages:ticket_messages(
+        *,
+        sender:team_members(*),
+        attachments:message_attachments(*)
+      )
     `)
     .eq('id', id)
     .single()
@@ -102,7 +126,7 @@ export async function createTicket(input: CreateCustomerTicketInput | CreateAgen
       title: input.title,
       description: input.description,
       priority: input.priority,
-      department: 'department' in input ? input.department : undefined,
+      department_id: 'departmentId' in input ? input.departmentId : undefined,
       metadata: {
         attachments: 'attachments' in input ? input.attachments : [],
         customFields: 'customFields' in input ? input.customFields : {},
@@ -112,7 +136,12 @@ export async function createTicket(input: CreateCustomerTicketInput | CreateAgen
       },
       assignee_id: 'assignedToId' in input ? input.assignedToId : undefined,
     })
-    .select()
+    .select(`
+      *,
+      customer:customers!customer_id(*),
+      assignee:team_members!assignee_id(*),
+      department:departments!department_id(*)
+    `)
     .single()
 
   if (error) {
@@ -131,8 +160,8 @@ export async function updateTicket(
     ...(input.description && { description: input.description }),
     ...(input.priority && { priority: input.priority }),
     ...(input.status && { status: input.status }),
-    ...(input.department && { department: input.department }),
-    ...(input.assigneeId && { assignee_id: input.assigneeId }),
+    ...(input.department_id && { department_id: input.department_id }),
+    ...(input.assignee_id && { assignee_id: input.assignee_id }),
     ...(input.metadata && { metadata: input.metadata }),
   }
 
@@ -140,7 +169,12 @@ export async function updateTicket(
     .from('tickets')
     .update(updates)
     .eq('id', id)
-    .select()
+    .select(`
+      *,
+      customer:customers!customer_id(*),
+      assignee:team_members!assignee_id(*),
+      department:departments!department_id(*)
+    `)
     .single()
 
   if (error) {
@@ -150,7 +184,7 @@ export async function updateTicket(
   return ticket as Ticket
 }
 
-export async function subscribeToTicketUpdates(
+export function subscribeToTicketUpdates(
   callback: (payload: { ticket: Ticket }) => void
 ) {
   const subscription = supabase

@@ -57,23 +57,7 @@ export async function getUserRole(): Promise<string | null> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  // First check if user is a team member
-  const { data: teamMember, error: teamError } = await supabase
-    .from('team_members')
-    .select('role')
-    .eq('user_id', user.id)
-    .maybeSingle()
-
-  if (teamError) {
-    console.error('Error fetching team member role:', teamError)
-    return null
-  }
-
-  if (teamMember?.role) {
-    return teamMember.role
-  }
-
-  // If not a team member, check if user is a customer
+  // First check if user is a customer
   const { data: customer, error: customerError } = await supabase
     .from('customers')
     .select('id')
@@ -85,7 +69,23 @@ export async function getUserRole(): Promise<string | null> {
     return null
   }
 
-  return customer ? 'customer' : null
+  if (customer) {
+    return 'customer'
+  }
+
+  // If not a customer, check if they're a team member
+  const { data: teamMember, error: teamError } = await supabase
+    .from('team_members')
+    .select('role')
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (teamError) {
+    console.error('Error fetching team member role:', teamError)
+    return null
+  }
+
+  return teamMember?.role || null
 }
 
 export async function updateTicketStatus(ticketId: string, status: string): Promise<void> {

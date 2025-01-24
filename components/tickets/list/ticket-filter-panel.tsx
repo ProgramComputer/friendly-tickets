@@ -1,232 +1,246 @@
 'use client'
 
 import { useState } from 'react'
-import { Calendar, Check, Filter, X } from 'lucide-react'
 import { format } from 'date-fns'
-import type { TicketStatus, TicketPriority } from '@/types/tickets'
-import { cn } from '@/lib/utils'
-import { baseStyles } from '@/lib/constants/ui'
+import { Calendar as CalendarIcon, Filter, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover'
-import { Calendar as CalendarComponent } from '@/components/ui/calendar'
+import { Card } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Calendar } from '@/components/ui/calendar'
 import { Badge } from '@/components/ui/badge'
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-} from '@/components/ui/command'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { cn } from '@/lib/utils'
 
 interface TicketFilterPanelProps {
-  selectedStatus: TicketStatus[]
-  selectedPriority: TicketPriority[]
-  dateRange: {
-    start: Date | undefined
-    end: Date | undefined
-  }
-  onStatusChange: (status: TicketStatus[]) => void
-  onPriorityChange: (priority: TicketPriority[]) => void
-  onDateRangeChange: (range: { start: Date | undefined; end: Date | undefined }) => void
+  onFilterChange: (filters: any) => void
   className?: string
 }
 
-const statusOptions: { value: TicketStatus; label: string }[] = [
-  { value: 'open', label: 'Open' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'resolved', label: 'Resolved' },
-  { value: 'closed', label: 'Closed' },
-]
-
-const priorityOptions: { value: TicketPriority; label: string }[] = [
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-  { value: 'urgent', label: 'Urgent' },
-]
-
 export function TicketFilterPanel({
-  selectedStatus,
-  selectedPriority,
-  dateRange,
-  onStatusChange,
-  onPriorityChange,
-  onDateRangeChange,
+  onFilterChange,
   className,
 }: TicketFilterPanelProps) {
-  const [isStatusOpen, setIsStatusOpen] = useState(false)
-  const [isPriorityOpen, setIsPriorityOpen] = useState(false)
-  const [isDateOpen, setIsDateOpen] = useState(false)
+  const [status, setStatus] = useState<string>()
+  const [priority, setPriority] = useState<string>()
+  const [dateRange, setDateRange] = useState<{
+    from?: Date
+    to?: Date
+  }>({})
+  const [assignee, setAssignee] = useState<string>()
 
-  const hasFilters =
-    selectedStatus.length > 0 ||
-    selectedPriority.length > 0 ||
-    dateRange.start ||
-    dateRange.end
+  const handleFilterChange = (key: string, value: any) => {
+    switch (key) {
+      case 'status':
+        setStatus(value)
+        break
+      case 'priority':
+        setPriority(value)
+        break
+      case 'dateRange':
+        setDateRange(value)
+        break
+      case 'assignee':
+        setAssignee(value)
+        break
+    }
 
-  const clearFilters = () => {
-    onStatusChange([])
-    onPriorityChange([])
-    onDateRangeChange({ start: undefined, end: undefined })
+    onFilterChange({
+      status,
+      priority,
+      dateRange,
+      assignee,
+      [key]: value,
+    })
   }
 
+  const clearFilters = () => {
+    setStatus(undefined)
+    setPriority(undefined)
+    setDateRange({})
+    setAssignee(undefined)
+    onFilterChange({})
+  }
+
+  const hasActiveFilters = status || priority || dateRange.from || assignee
+
   return (
-    <div className={cn('flex flex-wrap items-center gap-2', className)}>
-      {/* Status Filter */}
-      <Popover open={isStatusOpen} onOpenChange={setIsStatusOpen}>
-        <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="h-8">
-            <Filter className="mr-2 h-4 w-4" />
-            Status
-            {selectedStatus.length > 0 && (
-              <Badge variant="secondary" className="ml-2">
-                {selectedStatus.length}
-              </Badge>
-            )}
+    <Card className={cn('p-4', className)}>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4" />
+          <h3 className="font-medium">Filters</h3>
+        </div>
+        {hasActiveFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearFilters}
+            className="h-8 px-2 lg:px-3"
+          >
+            Clear
+            <X className="ml-2 h-4 w-4" />
           </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[200px] p-0" align="start">
-          <Command>
-            <CommandInput placeholder="Search status..." />
-            <CommandEmpty>No status found.</CommandEmpty>
-            <CommandGroup>
-              {statusOptions.map((option) => (
-                <CommandItem
-                  key={option.value}
-                  onSelect={() => {
-                    const isSelected = selectedStatus.includes(option.value)
-                    if (isSelected) {
-                      onStatusChange(
-                        selectedStatus.filter((s) => s !== option.value)
-                      )
-                    } else {
-                      onStatusChange([...selectedStatus, option.value])
-                    }
-                  }}
-                >
-                  <div
-                    className={cn(
-                      'mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary',
-                      selectedStatus.includes(option.value)
-                        ? 'bg-primary text-primary-foreground'
-                        : 'opacity-50 [&_svg]:invisible'
-                    )}
+        )}
+      </div>
+
+      <div className="space-y-4">
+        {/* Status Filter */}
+        <div className="space-y-2">
+          <Label>Status</Label>
+          <Select
+            value={status}
+            onValueChange={(value) => handleFilterChange('status', value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="All Statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="open">Open</SelectItem>
+              <SelectItem value="in_progress">In Progress</SelectItem>
+              <SelectItem value="resolved">Resolved</SelectItem>
+              <SelectItem value="closed">Closed</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Priority Filter */}
+        <div className="space-y-2">
+          <Label>Priority</Label>
+          <Select
+            value={priority}
+            onValueChange={(value) => handleFilterChange('priority', value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="All Priorities" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="low">Low</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="high">High</SelectItem>
+              <SelectItem value="urgent">Urgent</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Date Range Filter */}
+        <div className="space-y-2">
+          <Label>Date Range</Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  'w-full justify-start text-left font-normal',
+                  !dateRange.from && 'text-muted-foreground'
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {dateRange.from ? (
+                  dateRange.to ? (
+                    <>
+                      {format(dateRange.from, 'LLL dd, y')} -{' '}
+                      {format(dateRange.to, 'LLL dd, y')}
+                    </>
+                  ) : (
+                    format(dateRange.from, 'LLL dd, y')
+                  )
+                ) : (
+                  'Pick a date range'
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                initialFocus
+                mode="range"
+                selected={dateRange}
+                onSelect={(range) => handleFilterChange('dateRange', range)}
+                numberOfMonths={2}
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        {/* Assignee Filter */}
+        <div className="space-y-2">
+          <Label>Assignee</Label>
+          <Select
+            value={assignee}
+            onValueChange={(value) => handleFilterChange('assignee', value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="All Assignees" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="unassigned">Unassigned</SelectItem>
+              <SelectItem value="me">Assigned to Me</SelectItem>
+              <SelectItem value="team">My Team</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Active Filters */}
+        {hasActiveFilters && (
+          <div className="space-y-2">
+            <Label>Active Filters</Label>
+            <div className="flex flex-wrap gap-2">
+              {status && (
+                <Badge variant="secondary" className="gap-1">
+                  Status: {status}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-4 w-4 p-0 hover:bg-transparent"
+                    onClick={() => handleFilterChange('status', undefined)}
                   >
-                    <Check className={cn('h-4 w-4')} />
-                  </div>
-                  {option.label}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </Command>
-        </PopoverContent>
-      </Popover>
-
-      {/* Priority Filter */}
-      <Popover open={isPriorityOpen} onOpenChange={setIsPriorityOpen}>
-        <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="h-8">
-            <Filter className="mr-2 h-4 w-4" />
-            Priority
-            {selectedPriority.length > 0 && (
-              <Badge variant="secondary" className="ml-2">
-                {selectedPriority.length}
-              </Badge>
-            )}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[200px] p-0" align="start">
-          <Command>
-            <CommandInput placeholder="Search priority..." />
-            <CommandEmpty>No priority found.</CommandEmpty>
-            <CommandGroup>
-              {priorityOptions.map((option) => (
-                <CommandItem
-                  key={option.value}
-                  onSelect={() => {
-                    const isSelected = selectedPriority.includes(option.value)
-                    if (isSelected) {
-                      onPriorityChange(
-                        selectedPriority.filter((p) => p !== option.value)
-                      )
-                    } else {
-                      onPriorityChange([...selectedPriority, option.value])
-                    }
-                  }}
-                >
-                  <div
-                    className={cn(
-                      'mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary',
-                      selectedPriority.includes(option.value)
-                        ? 'bg-primary text-primary-foreground'
-                        : 'opacity-50 [&_svg]:invisible'
-                    )}
+                    <X className="h-3 w-3" />
+                  </Button>
+                </Badge>
+              )}
+              {priority && (
+                <Badge variant="secondary" className="gap-1">
+                  Priority: {priority}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-4 w-4 p-0 hover:bg-transparent"
+                    onClick={() => handleFilterChange('priority', undefined)}
                   >
-                    <Check className={cn('h-4 w-4')} />
-                  </div>
-                  {option.label}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </Command>
-        </PopoverContent>
-      </Popover>
-
-      {/* Date Range Filter */}
-      <Popover open={isDateOpen} onOpenChange={setIsDateOpen}>
-        <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="h-8">
-            <Calendar className="mr-2 h-4 w-4" />
-            {dateRange.start ? (
-              dateRange.end ? (
-                <>
-                  {format(dateRange.start, 'LLL dd, y')} -{' '}
-                  {format(dateRange.end, 'LLL dd, y')}
-                </>
-              ) : (
-                format(dateRange.start, 'LLL dd, y')
-              )
-            ) : (
-              'Date Range'
-            )}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <CalendarComponent
-            initialFocus
-            mode="range"
-            defaultMonth={dateRange.start}
-            selected={{
-              from: dateRange.start,
-              to: dateRange.end,
-            }}
-            onSelect={(range) =>
-              onDateRangeChange({
-                start: range?.from,
-                end: range?.to,
-              })
-            }
-            numberOfMonths={2}
-          />
-        </PopoverContent>
-      </Popover>
-
-      {/* Clear Filters */}
-      {hasFilters && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-8"
-          onClick={clearFilters}
-        >
-          <X className="mr-2 h-4 w-4" />
-          Clear Filters
-        </Button>
-      )}
-    </div>
+                    <X className="h-3 w-3" />
+                  </Button>
+                </Badge>
+              )}
+              {dateRange.from && (
+                <Badge variant="secondary" className="gap-1">
+                  Date Range
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-4 w-4 p-0 hover:bg-transparent"
+                    onClick={() => handleFilterChange('dateRange', {})}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </Badge>
+              )}
+              {assignee && (
+                <Badge variant="secondary" className="gap-1">
+                  Assignee: {assignee}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-4 w-4 p-0 hover:bg-transparent"
+                    onClick={() => handleFilterChange('assignee', undefined)}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </Badge>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </Card>
   )
 } 

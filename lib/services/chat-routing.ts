@@ -1,19 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
-import { Redis } from '@upstash/redis'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
-
-const redis = Redis.fromEnv()
-
-// Queue keys
-const CHAT_QUEUE = 'chat:queue'
-const AGENT_LOAD = 'chat:agent:load:'
-const AGENT_MAX_CHATS = 'chat:agent:max:'
-const AGENT_STATUS = 'chat:agent:status:'
-
+// Types
 interface ChatRequest {
   sessionId: string
   customerId: string
@@ -24,163 +9,148 @@ interface ChatRequest {
 interface AgentStatus {
   id: string
   status: 'online' | 'away' | 'offline'
-  currentLoad: number
-  maxChats: number
+  lastSeen: number
 }
 
-export async function addToQueue(sessionId: string, customerId: string, priority = 1) {
-  const request: ChatRequest = {
-    sessionId,
-    customerId,
-    priority,
-    timestamp: Date.now(),
-  }
-
-  // Add to sorted set with score as priority
-  await redis.zadd(CHAT_QUEUE, {
-    score: priority,
-    member: JSON.stringify(request),
+// Queue Management
+export async function addToQueue(request: ChatRequest) {
+  const response = await fetch('/api/chat/routing', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'add_to_queue',
+      ...request
+    })
   })
 
-  return request
+  if (!response.ok) {
+    throw new Error('Failed to add to queue')
+  }
 }
 
 export async function removeFromQueue(sessionId: string) {
-  const members = await redis.zrange(CHAT_QUEUE, 0, -1)
-  const target = members.find((m) => {
-    const request = JSON.parse(m) as ChatRequest
-    return request.sessionId === sessionId
+  const response = await fetch('/api/chat/routing', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'remove_from_queue',
+      sessionId
+    })
   })
 
-  if (target) {
-    await redis.zrem(CHAT_QUEUE, target)
+  if (!response.ok) {
+    throw new Error('Failed to remove from queue')
   }
 }
 
 export async function getNextInQueue(): Promise<ChatRequest | null> {
-  const [request] = await redis.zrange(CHAT_QUEUE, 0, 0)
-  return request ? JSON.parse(request) : null
+  const response = await fetch('/api/chat/routing', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'get_next_in_queue'
+    })
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to get next in queue')
+  }
+
+  return response.json()
 }
 
-export async function updateAgentStatus(
-  agentId: string,
-  status: 'online' | 'away' | 'offline'
-) {
-  await redis.set(AGENT_STATUS + agentId, status)
+// Agent Management
+export async function updateAgentStatus(agentId: string, status: AgentStatus['status']) {
+  const response = await fetch('/api/chat/routing', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'update_agent_status',
+      agentId,
+      status
+    })
+  })
 
-  // If going offline, reassign their chats
-  if (status === 'offline') {
-    await reassignChats(agentId)
+  if (!response.ok) {
+    throw new Error('Failed to update agent status')
   }
 }
 
 export async function updateAgentLoad(agentId: string, currentLoad: number) {
-  await redis.set(AGENT_LOAD + agentId, currentLoad)
+  const response = await fetch('/api/chat/routing', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'update_agent_load',
+      agentId,
+      currentLoad
+    })
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to update agent load')
+  }
 }
 
 export async function setAgentMaxChats(agentId: string, maxChats: number) {
-  await redis.set(AGENT_MAX_CHATS + agentId, maxChats)
+  const response = await fetch('/api/chat/routing', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'set_agent_max_chats',
+      agentId,
+      maxChats
+    })
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to set agent max chats')
+  }
 }
 
 export async function getAvailableAgent(): Promise<string | null> {
-  // Get all online agents
-  const agents = await supabase
-    .from('team_members')
-    .select('id, chat_agent_preferences!inner(max_concurrent_chats)')
-    .eq('role', 'agent')
-
-  if (!agents.data) return null
-
-  // Get their current status and load
-  const agentStatuses = await Promise.all(
-    agents.data.map(async (agent) => {
-      const [status, currentLoad] = await Promise.all([
-        redis.get<'online' | 'away' | 'offline'>(AGENT_STATUS + agent.id),
-        redis.get<number>(AGENT_LOAD + agent.id),
-      ])
-
-      return {
-        id: agent.id,
-        status: status || 'offline',
-        currentLoad: currentLoad || 0,
-        maxChats: agent.chat_agent_preferences.max_concurrent_chats,
-      }
+  const response = await fetch('/api/chat/routing', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'get_available_agent'
     })
-  )
+  })
 
-  // Find the best available agent
-  const availableAgent = agentStatuses
-    .filter((a) => a.status === 'online' && a.currentLoad < a.maxChats)
-    .sort((a, b) => {
-      // Sort by load ratio (current/max) ascending
-      const aRatio = a.currentLoad / a.maxChats
-      const bRatio = b.currentLoad / b.maxChats
-      return aRatio - bRatio
-    })[0]
+  if (!response.ok) {
+    throw new Error('Failed to get available agent')
+  }
 
-  return availableAgent?.id || null
+  return response.json()
 }
 
 export async function assignChat(sessionId: string, agentId: string) {
-  // Update chat session
-  const { error } = await supabase
-    .from('chat_sessions')
-    .update({
-      agent_id: agentId,
-      status: 'active',
+  const response = await fetch('/api/chat/routing', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'assign_chat',
+      sessionId,
+      agentId
     })
-    .eq('id', sessionId)
+  })
 
-  if (error) throw error
-
-  // Increment agent load
-  const currentLoad = await redis.get<number>(AGENT_LOAD + agentId) || 0
-  await updateAgentLoad(agentId, currentLoad + 1)
-
-  // Remove from queue
-  await removeFromQueue(sessionId)
+  if (!response.ok) {
+    throw new Error('Failed to assign chat')
+  }
 }
 
-async function reassignChats(agentId: string) {
-  // Get all active chats for the agent
-  const { data: chats } = await supabase
-    .from('chat_sessions')
-    .select('id')
-    .eq('agent_id', agentId)
-    .eq('status', 'active')
-
-  if (!chats) return
-
-  // Add each chat back to queue
-  await Promise.all(
-    chats.map((chat) =>
-      addToQueue(chat.id, chat.customer_id, 2) // Higher priority for reassignment
-    )
-  )
-
-  // Update chat sessions to pending
-  await supabase
-    .from('chat_sessions')
-    .update({
-      agent_id: null,
-      status: 'pending',
+export async function reassignChats(agentId: string) {
+  const response = await fetch('/api/chat/routing', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'reassign_chats',
+      agentId
     })
-    .eq('agent_id', agentId)
-    .eq('status', 'active')
-}
+  })
 
-// Process queue
-export async function processQueue() {
-  const nextChat = await getNextInQueue()
-  if (!nextChat) return
-
-  const availableAgent = await getAvailableAgent()
-  if (!availableAgent) return
-
-  await assignChat(nextChat.sessionId, availableAgent)
-}
-
-// Auto-process queue every 5 seconds
-if (typeof window === 'undefined') { // Only run on server
-  setInterval(processQueue, 5000)
+  if (!response.ok) {
+    throw new Error('Failed to reassign chats')
+  }
 } 

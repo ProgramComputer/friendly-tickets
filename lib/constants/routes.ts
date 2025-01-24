@@ -2,43 +2,36 @@ import { UserRole } from '@/types/auth'
 
 export const ROUTES = {
   auth: {
-    login: '/auth/login',
-    signup: '/auth/signup',
-    forgotPassword: '/auth/forgot-password',
-    resetPassword: '/auth/reset-password',
+    login: '/login',
+    signup: '/signup',
+    forgotPassword: '/forgot-password',
+    resetPassword: '/reset-password',
+    callback: '/callback'
   },
-  role: {
-    admin: '/admin/dashboard',
-    agent: '/tickets',
-    customer: '/tickets',
-  } as Record<UserRole, string>,
-  tickets: {
-    list: '/tickets',
-    new: '/tickets/new',
-    view: (id: string) => `/tickets/${id}`,
+  admin: {
+    overview: '/overview',
+    departments: '/departments',
+    reports: '/reports',
+    team: '/team',
+    settings: '/settings'
   },
-  team: {
-    list: "/employee/team",
-    create: "/employee/team/create",
-    view: (id: string) => `/employee/team/${id}`,
+  agent: {
+    workspace: '/workspace',
+    queue: '/queue',
+    templates: '/templates'
   },
-  reports: {
-    dashboard: "/employee/reports",
-    tickets: "/employee/reports/tickets",
-    performance: "/employee/reports/performance",
+  dashboard: {
+    home: '/dashboard',
+    tickets: '/tickets',
+    settings: '/settings'
   },
-  settings: {
-    employee: {
-      general: "/employee/settings",
-      profile: "/employee/settings/profile",
-      notifications: "/employee/settings/notifications",
-      security: "/employee/settings/security",
-    },
-    customer: {
-      profile: "/customer/settings/profile",
-      notifications: "/customer/settings/notifications",
-      security: "/customer/settings/security",
-    },
+  kb: {
+    home: '/kb',
+    articles: '/kb/articles',
+    categories: '/kb/categories'
+  },
+  public: {
+    home: '/'
   },
 } as const
 

@@ -100,6 +100,267 @@ const TICKET_TAGS = [
   { name: 'api', color: '#14B8A6' }
 ]
 
+// Knowledge Base Categories
+const KB_CATEGORIES = [
+  {
+    id: 'getting-started',
+    name: 'Getting Started',
+    description: 'Learn the basics of using AutoCRM and get up to speed quickly.'
+  },
+  {
+    id: 'account',
+    name: 'Account & Billing',
+    description: 'Manage your account settings and billing information.'
+  },
+  {
+    id: 'features',
+    name: 'Features & Usage',
+    description: 'Detailed guides on using AutoCRM features effectively.'
+  },
+  {
+    id: 'troubleshooting',
+    name: 'Troubleshooting',
+    description: 'Common issues and their solutions.'
+  },
+  {
+    id: 'integrations',
+    name: 'Integrations',
+    description: 'Connect AutoCRM with other tools and services.'
+  }
+] as const
+
+// Knowledge Base Articles
+const KB_ARTICLES = [
+  {
+    id: 'getting-started',
+    title: 'Getting Started with AutoCRM',
+    content: `
+      <h2>Welcome to AutoCRM</h2>
+      <p>This guide will help you get started with AutoCRM's customer support system. Follow these steps to begin:</p>
+      
+      <h3>1. Creating Your Account</h3>
+      <p>To get started, you'll need to create an account. Click the "Sign Up" button in the top right corner and follow the prompts.</p>
+      
+      <h3>2. Creating Your First Ticket</h3>
+      <p>Once you're logged in, you can create a support ticket by clicking the "New Ticket" button in your dashboard.</p>
+      
+      <h3>3. Using the Chat Feature</h3>
+      <p>Our real-time chat feature allows you to communicate directly with support agents. Look for the chat icon in the bottom right corner.</p>
+      
+      <h3>4. Checking Ticket Status</h3>
+      <p>You can check the status of your tickets at any time by visiting the "My Tickets" section in your dashboard.</p>
+    `,
+    excerpt: 'A complete guide to getting started with AutoCRM\'s customer support system.',
+    category_id: 'getting-started',
+    read_time_minutes: 5
+  },
+  {
+    id: 'create-ticket',
+    title: 'How to Create Your First Ticket',
+    content: `
+      <h2>Creating Support Tickets</h2>
+      <p>Learn how to create and manage support tickets effectively with this step-by-step guide.</p>
+      
+      <h3>Steps to Create a Ticket</h3>
+      <ol>
+        <li>Navigate to your dashboard</li>
+        <li>Click the "New Ticket" button</li>
+        <li>Fill in the ticket details</li>
+        <li>Add any relevant attachments</li>
+        <li>Submit your ticket</li>
+      </ol>
+      
+      <h3>Best Practices</h3>
+      <ul>
+        <li>Be specific about your issue</li>
+        <li>Include relevant screenshots</li>
+        <li>Provide steps to reproduce the problem</li>
+        <li>List any troubleshooting steps already taken</li>
+      </ul>
+    `,
+    excerpt: 'Learn how to create and manage support tickets effectively.',
+    category_id: 'getting-started',
+    read_time_minutes: 3
+  },
+  {
+    id: 'billing-faq',
+    title: 'Billing Frequently Asked Questions',
+    content: `
+      <h2>Billing FAQ</h2>
+      <p>Find answers to common billing questions and learn how to manage your subscription.</p>
+      
+      <h3>Payment Methods</h3>
+      <p>We accept all major credit cards and PayPal. Enterprise customers can also pay via invoice.</p>
+      
+      <h3>Billing Cycles</h3>
+      <p>Subscriptions are billed monthly or annually. Annual subscriptions receive a 20% discount.</p>
+      
+      <h3>Refunds</h3>
+      <p>We offer prorated refunds for annual subscriptions. Monthly subscriptions can be cancelled anytime.</p>
+    `,
+    excerpt: 'Common questions about billing, payments, and subscriptions.',
+    category_id: 'account',
+    read_time_minutes: 4
+  },
+  {
+    id: 'api-integration',
+    title: 'API Integration Guide',
+    content: `
+      <h2>API Integration</h2>
+      <p>Learn how to integrate AutoCRM with your existing systems using our REST API.</p>
+      
+      <h3>Authentication</h3>
+      <p>All API requests require an API key. You can generate one in your account settings.</p>
+      
+      <h3>Rate Limits</h3>
+      <p>API requests are limited to 1000 per minute for standard accounts.</p>
+      
+      <h3>Endpoints</h3>
+      <ul>
+        <li>/api/tickets - Manage support tickets</li>
+        <li>/api/users - User management</li>
+        <li>/api/chat - Real-time chat integration</li>
+      </ul>
+    `,
+    excerpt: 'Comprehensive guide to integrating with AutoCRM\'s API.',
+    category_id: 'integrations',
+    read_time_minutes: 8
+  }
+] as const
+
+// Define departments
+const DEPARTMENTS = [
+  {
+    id: 'tech-support',
+    name: 'Technical Support',
+    description: 'Handle technical issues and product support'
+  },
+  {
+    id: 'billing',
+    name: 'Billing Support',
+    description: 'Handle billing and subscription inquiries'
+  },
+  {
+    id: 'customer-success',
+    name: 'Customer Success',
+    description: 'Handle account management and customer satisfaction'
+  }
+] as const
+
+// Define SLA policies
+const SLA_POLICIES = [
+  {
+    name: 'Enterprise',
+    description: 'Premium support for enterprise customers',
+    response_time_minutes: 30,
+    resolution_time_minutes: 240,
+    priority: 'high'
+  },
+  {
+    name: 'Standard',
+    description: 'Standard support for regular customers',
+    response_time_minutes: 120,
+    resolution_time_minutes: 480,
+    priority: 'medium'
+  },
+  {
+    name: 'Basic',
+    description: 'Basic support for free tier',
+    response_time_minutes: 240,
+    resolution_time_minutes: 960,
+    priority: 'low'
+  }
+] as const
+
+// Sample ticket templates
+const TICKET_TEMPLATES = [
+  {
+    name: 'Login Issue',
+    subject: 'Unable to login',
+    content: 'User is experiencing login issues. Please verify:\n- Account status\n- Recent password changes\n- 2FA status',
+    department_id: 'tech-support'
+  },
+  {
+    name: 'Billing Inquiry',
+    subject: 'Billing Question',
+    content: 'Customer has billing inquiry. Check:\n- Current plan\n- Recent charges\n- Payment method status',
+    department_id: 'billing'
+  },
+  {
+    name: 'Feature Request',
+    subject: 'New Feature Suggestion',
+    content: 'Customer feature request. Document:\n- Requested functionality\n- Use case\n- Business impact',
+    department_id: 'customer-success'
+  }
+] as const
+
+// Sample ticket data
+const SAMPLE_TICKETS = [
+  {
+    title: 'Cannot access dashboard',
+    description: 'Getting 403 error when trying to access the main dashboard',
+    priority: 'high',
+    status: 'open',
+    department: 'tech-support',
+    messages: [
+      {
+        content: 'I keep getting an error when trying to access the dashboard. Can someone help?',
+        is_internal: false
+      },
+      {
+        content: 'I\'ve checked your account and noticed some permission issues. Working on fixing this now.',
+        is_internal: false
+      },
+      {
+        content: 'Note: User\'s role permissions were misconfigured during last update',
+        is_internal: true
+      }
+    ]
+  },
+  {
+    title: 'Billing cycle question',
+    description: 'Need clarification on billing cycle and upcoming charges',
+    priority: 'medium',
+    status: 'in_progress',
+    department: 'billing',
+    messages: [
+      {
+        content: 'Can someone explain why I was charged twice this month?',
+        is_internal: false
+      },
+      {
+        content: 'I\'ll look into your billing history and get back to you shortly.',
+        is_internal: false
+      },
+      {
+        content: 'Customer was charged for both monthly and annual plan - needs refund',
+        is_internal: true
+      }
+    ]
+  },
+  {
+    title: 'Feature suggestion: Dark mode',
+    description: 'Would love to see a dark mode option added',
+    priority: 'low',
+    status: 'pending',
+    department: 'customer-success',
+    messages: [
+      {
+        content: 'Dark mode would be really helpful for night time use. Any plans to add this?',
+        is_internal: false
+      },
+      {
+        content: 'Thanks for the suggestion! We\'re actually working on this feature now.',
+        is_internal: false
+      },
+      {
+        content: 'Dark mode is planned for next sprint - keep customer updated',
+        is_internal: true
+      }
+    ]
+  }
+] as const
+
 async function getOrCreateUser(email: string, password: string) {
   try {
     // First try to sign in
@@ -339,6 +600,36 @@ async function seedTags() {
   console.log('Seeded tags')
 }
 
+async function seedKnowledgeBase() {
+  console.log('Seeding knowledge base categories...')
+  const { error: categoriesError } = await supabase
+    .from('kb_categories')
+    .upsert(
+      KB_CATEGORIES,
+      { onConflict: 'id', ignoreDuplicates: false }
+    )
+  
+  if (categoriesError) {
+    console.error('Error seeding KB categories:', categoriesError)
+    throw categoriesError
+  }
+  console.log('KB categories seeded successfully')
+
+  console.log('Seeding knowledge base articles...')
+  const { error: articlesError } = await supabase
+    .from('kb_articles')
+    .upsert(
+      KB_ARTICLES,
+      { onConflict: 'id', ignoreDuplicates: false }
+    )
+  
+  if (articlesError) {
+    console.error('Error seeding KB articles:', articlesError)
+    throw articlesError
+  }
+  console.log('KB articles seeded successfully')
+}
+
 async function createTicketWithHistory(
   customerId: string,
   assigneeId: string | null,
@@ -483,147 +774,109 @@ async function seedVIPScenario(
 
 async function seedTestData(options: { role?: UserRole } = {}) {
   try {
-    console.log('Starting seed process...')
+    console.log('Starting to seed test data...')
 
-    // Get or create users
-    const customerUser = await getOrCreateUser(TEST_USERS.customer.email, TEST_USERS.customer.password)
-    const agentUser = await getOrCreateUser(TEST_USERS.agent.email, TEST_USERS.agent.password)
-    const adminUser = await getOrCreateUser(TEST_USERS.admin.email, TEST_USERS.admin.password)
+    // Seed departments
+    console.log('Seeding departments...')
+    await supabase.from('departments').upsert(
+      DEPARTMENTS.map(dept => ({
+        id: dept.id,
+        name: dept.name,
+        description: dept.description
+      }))
+    )
 
-    if (!customerUser?.id || !agentUser?.id || !adminUser?.id) {
-      throw new Error('Failed to get or create users')
-    }
+    // Seed SLA policies
+    console.log('Seeding SLA policies...')
+    await supabase.from('sla_policies').upsert(
+      SLA_POLICIES.map(policy => ({
+        name: policy.name,
+        description: policy.description,
+        response_time_minutes: policy.response_time_minutes,
+        resolution_time_minutes: policy.resolution_time_minutes,
+        priority: policy.priority
+      }))
+    )
 
-    console.log('Users created/retrieved:', {
-      customer: customerUser.id,
-      agent: agentUser.id,
-      admin: adminUser.id
-    })
+    // Seed ticket templates
+    console.log('Seeding ticket templates...')
+    await supabase.from('ticket_templates').upsert(
+      TICKET_TEMPLATES.map(template => ({
+        name: template.name,
+        subject: template.subject,
+        content: template.content,
+        department_id: template.department_id
+      }))
+    )
 
-    console.log('Waiting for auth system to settle...')
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    // Create test users
+    console.log('Creating test users...')
+    const users = await Promise.all(
+      Object.entries({ ...TEST_USERS, ...ADDITIONAL_TEST_USERS }).map(
+        async ([role, user]) => {
+          const dbUser = await getOrCreateUser(user.email, user.password)
+          return { role, ...user, id: dbUser.id }
+        }
+      )
+    )
 
-    try {
-      // Upsert profiles and get their IDs
-      console.log('Creating customer profile...')
-      const customer = await upsertCustomer(customerUser.id, TEST_USERS.customer.email, TEST_USERS.customer.name)
-      
-      console.log('Creating agent profile...')
-      const agent = await upsertTeamMember(agentUser.id, TEST_USERS.agent.email, TEST_USERS.agent.name, 'agent')
-      
-      console.log('Creating admin profile...')
-      await upsertTeamMember(adminUser.id, TEST_USERS.admin.email, TEST_USERS.admin.name, 'admin')
+    // Create team members for agents and admin
+    console.log('Creating team members...')
+    const teamMembers = users
+      .filter(user => user.role !== 'customer')
+      .map(user => ({
+        user_id: user.id,
+        name: user.name,
+        role: user.role,
+        department_id: DEPARTMENTS[0].id // Assign to first department by default
+      }))
 
-      if (!customer?.id || !agent?.id) {
-        throw new Error('Failed to get profile IDs')
-      }
+    await supabase.from('team_members').upsert(teamMembers)
 
-      console.log('Profiles created successfully:', {
-        customerId: customer.id,
-        agentId: agent.id
-      })
+    // Seed tickets with messages
+    console.log('Seeding tickets and messages...')
+    for (const ticket of SAMPLE_TICKETS) {
+      const customer = users.find(u => u.role === 'customer')!
+      const agent = users.find(u => u.role === 'agent')!
 
-      // Verify customer exists before creating tickets
-      const { data: verifyCustomer, error: verifyError } = await supabase
-        .from('customers')
-        .select('*')
-        .eq('id', customer.id)
+      const { data: newTicket } = await supabase
+        .from('tickets')
+        .insert({
+          title: ticket.title,
+          description: ticket.description,
+          priority: ticket.priority,
+          status: ticket.status,
+          department: ticket.department,
+          customer_id: customer.id,
+          assignee_id: agent.id
+        })
+        .select()
         .single()
       
-      if (verifyError) {
-        console.error('Error verifying customer:', verifyError)
-        throw new Error(`Failed to verify customer: ${verifyError.message}`)
+      if (newTicket) {
+        await supabase.from('ticket_messages').insert(
+          ticket.messages.map(msg => ({
+            ticket_id: newTicket.id,
+            content: msg.content,
+            is_internal: msg.is_internal,
+            sender_id: msg.is_internal ? agent.id : customer.id
+          }))
+        )
       }
-      
-      if (!verifyCustomer) {
-        console.error('No customer found with ID:', customer.id)
-        throw new Error('Customer verification failed: No customer found')
-      }
-
-      console.log('Verified customer exists:', verifyCustomer)
-
-      try {
-        console.log('Creating tickets with customer ID:', customer.id)
-        const tickets = await upsertTickets(customer.id, agent.id)
-        console.log('Tickets created successfully')
-        
-        console.log('Creating messages...')
-        await upsertMessages(tickets, customerUser.id, agentUser.id)
-        console.log('Messages created successfully')
-      } catch (ticketError) {
-        console.error('Error creating tickets or messages:', ticketError)
-        throw ticketError
-      }
-
-    } catch (profileError) {
-      console.error('Error in profile creation/verification:', profileError)
-      throw profileError
     }
 
-    // Return login credentials based on requested role
-    if (options.role) {
-      const user = TEST_USERS[options.role]
-      console.log(`\nTest data seeded successfully! Use these credentials for ${options.role}:`)
-      console.log(`Email: ${user.email}`)
-      console.log(`Password: ${user.password}`)
-    } else {
-      console.log('\nTest data seeded successfully! Available test users:')
-      Object.entries(TEST_USERS).forEach(([role, user]) => {
-        console.log(`\n${role.toUpperCase()}:`)
-        console.log(`Email: ${user.email}`)
-        console.log(`Password: ${user.password}`)
-      })
-    }
-
-    // Seed additional users
-    console.log('\nSeeding additional users...')
-    try {
-      const enterpriseUser = await getOrCreateUser(ADDITIONAL_TEST_USERS.enterpriseCustomer.email, ADDITIONAL_TEST_USERS.enterpriseCustomer.password)
-      const vipUser = await getOrCreateUser(ADDITIONAL_TEST_USERS.vipCustomer.email, ADDITIONAL_TEST_USERS.vipCustomer.password)
-      const seniorAgent = await getOrCreateUser(ADDITIONAL_TEST_USERS.seniorAgent.email, ADDITIONAL_TEST_USERS.seniorAgent.password)
-      const teamLead = await getOrCreateUser(ADDITIONAL_TEST_USERS.teamLead.email, ADDITIONAL_TEST_USERS.teamLead.password)
-      const techAgent = await getOrCreateUser(ADDITIONAL_TEST_USERS.techAgent.email, ADDITIONAL_TEST_USERS.techAgent.password)
-      const billingAgent = await getOrCreateUser(ADDITIONAL_TEST_USERS.billingAgent.email, ADDITIONAL_TEST_USERS.billingAgent.password)
-
-      // Create customer profiles
-      await upsertCustomer(enterpriseUser.id, ADDITIONAL_TEST_USERS.enterpriseCustomer.email, ADDITIONAL_TEST_USERS.enterpriseCustomer.name)
-      await upsertCustomer(vipUser.id, ADDITIONAL_TEST_USERS.vipCustomer.email, ADDITIONAL_TEST_USERS.vipCustomer.name)
-
-      // Create team member profiles
-      await upsertTeamMember(seniorAgent.id, ADDITIONAL_TEST_USERS.seniorAgent.email, ADDITIONAL_TEST_USERS.seniorAgent.name, 'agent')
-      await upsertTeamMember(teamLead.id, ADDITIONAL_TEST_USERS.teamLead.email, ADDITIONAL_TEST_USERS.teamLead.name, 'agent')
-      await upsertTeamMember(techAgent.id, ADDITIONAL_TEST_USERS.techAgent.email, ADDITIONAL_TEST_USERS.techAgent.name, 'agent')
-      await upsertTeamMember(billingAgent.id, ADDITIONAL_TEST_USERS.billingAgent.email, ADDITIONAL_TEST_USERS.billingAgent.name, 'agent')
+    // Seed knowledge base
+    console.log('Seeding knowledge base...')
+    await supabase.from('kb_categories').upsert(KB_CATEGORIES)
+    await supabase.from('kb_articles').upsert(KB_ARTICLES)
 
       // Seed tags
-      await seedTags()
+    console.log('Seeding tags...')
+    await supabase.from('tags').upsert(TICKET_TAGS)
 
-      // Create agent IDs map
-      const agentIds = {
-        seniorAgent: seniorAgent.id,
-        teamLead: teamLead.id,
-        techAgent: techAgent.id,
-        billingAgent: billingAgent.id
-      }
-
-      // Seed enterprise and VIP scenarios
-      await seedEnterpriseScenario(enterpriseUser.id, agentIds)
-      await seedVIPScenario(vipUser.id, agentIds)
-
-    } catch (additionalUsersError) {
-      console.error('Error seeding additional users:', additionalUsersError)
-      // Don't throw here, as main seeding is complete
-    }
-
-    console.log('Seeding completed successfully')
+    console.log('Seeding completed successfully!')
   } catch (error) {
-    console.error('Error in seed process:', error)
-    if (error instanceof Error) {
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack
-      })
-    }
+    console.error('Error seeding test data:', error)
     throw error
   }
 }

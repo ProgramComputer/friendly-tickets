@@ -14,11 +14,6 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   {
-    title: "Dashboard",
-    href: "/dashboard",
-    requireFeature: "view_tickets",
-  },
-  {
     title: "Tickets",
     href: "/tickets",
     requireFeature: "view_tickets",

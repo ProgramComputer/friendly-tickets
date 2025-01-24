@@ -2,11 +2,10 @@
 
 import { MessageSquare, MoreVertical } from 'lucide-react'
 import { format } from 'date-fns'
-import Link from 'next/link'
 import type { Ticket } from '@/types/tickets'
 import { cn } from '@/lib/utils'
 import { baseStyles } from '@/lib/constants/ui'
-import { PriorityIndicator } from '../priority-indicator'
+import { PriorityIndicator } from '@/components/shared/priority-indicator'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +18,8 @@ import { useUpdateTicket } from '@/lib/hooks/tickets/use-tickets'
 interface TicketListItemProps {
   ticket: Ticket
   className?: string
+  onSelect?: (ticketId: string) => void
+  isSelected?: boolean
 }
 
 const statusColors = {
@@ -28,7 +29,7 @@ const statusColors = {
   closed: 'bg-secondary text-white',
 }
 
-export function TicketListItem({ ticket, className }: TicketListItemProps) {
+export function TicketListItem({ ticket, className, onSelect, isSelected }: TicketListItemProps) {
   const updateTicket = useUpdateTicket()
 
   const handleStatusChange = async (status: Ticket['status']) => {
@@ -40,11 +41,13 @@ export function TicketListItem({ ticket, className }: TicketListItemProps) {
 
   return (
     <div
+      onClick={() => onSelect?.(ticket.id)}
       className={cn(
         baseStyles.card.base,
         baseStyles.card.bordered,
         baseStyles.card.interactive,
-        'p-4',
+        isSelected && 'border-primary',
+        'p-4 cursor-pointer',
         className
       )}
     >
@@ -52,12 +55,9 @@ export function TicketListItem({ ticket, className }: TicketListItemProps) {
         <div className="flex-1 space-y-1">
           {/* Title and Status */}
           <div className="flex items-center gap-2">
-            <Link
-              href={`/tickets/${ticket.id}`}
-              className="text-base font-medium hover:underline"
-            >
+            <span className="text-base font-medium">
               {ticket.title}
-            </Link>
+            </span>
             <span
               className={cn(
                 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
@@ -79,7 +79,7 @@ export function TicketListItem({ ticket, className }: TicketListItemProps) {
           <div className="flex items-center gap-4 text-xs text-secondary-light">
             <span>#{ticket.id.slice(0, 8)}</span>
             <span>
-              Created {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
+              Created {format(new Date(ticket.created_at), 'MMM d, yyyy')}
             </span>
             {ticket._count?.messages && (
               <span className="flex items-center gap-1">
@@ -95,12 +95,12 @@ export function TicketListItem({ ticket, className }: TicketListItemProps) {
           <PriorityIndicator priority={ticket.priority} showLabel size="sm" />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}>
                 <MoreVertical className="h-4 w-4" />
                 <span className="sr-only">Open menu</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
               <DropdownMenuItem
                 onClick={() => handleStatusChange('open')}
                 disabled={ticket.status === 'open'}

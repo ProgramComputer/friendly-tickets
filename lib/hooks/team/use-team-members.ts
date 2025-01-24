@@ -19,7 +19,14 @@ interface CreateTeamMemberInput {
 async function getTeamMembers(): Promise<TeamMember[]> {
   const { data, error } = await supabase
     .from('team_members')
-    .select('*, department:departments(id, name)')
+    .select(`
+      *,
+      department:departments!department_id(
+        id,
+        name,
+        description
+      )
+    `)
     .order('name')
 
   if (error) {
@@ -39,7 +46,14 @@ async function createTeamMember(input: CreateTeamMemberInput): Promise<TeamMembe
       department_id: input.departmentId,
       specialties: input.specialties,
     })
-    .select('*, department:departments(id, name)')
+    .select(`
+      *,
+      department:departments!department_id(
+        id,
+        name,
+        description
+      )
+    `)
     .single()
 
   if (error) {
@@ -63,7 +77,14 @@ async function updateTeamMember(
       specialties: input.specialties,
     })
     .eq('id', id)
-    .select('*, department:departments(id, name)')
+    .select(`
+      *,
+      department:departments!department_id(
+        id,
+        name,
+        description
+      )
+    `)
     .single()
 
   if (error) {
@@ -123,23 +144,40 @@ export function useDeleteTeamMember() {
 }
 
 export async function getTeamMemberRole(userId: string): Promise<string | null> {
-  const supabase = createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  try {
+    // First check if user is a customer (to avoid 406 on team_members query for customers)
+    const { data: customer, error: customerError } = await supabase
+      .from('customers')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .maybeSingle()
 
-  const { data, error } = await supabase
-    .from('team_members')
-    .select('role')
-    .eq('user_id', userId)
-    .maybeSingle()
+    if (customerError) {
+      console.error('Error fetching customer:', customerError)
+      return null
+    }
 
-  if (error) {
-    console.error('Error fetching team member role:', error)
+    if (customer) {
+      return 'customer'
+    }
+
+    // If not a customer, then check team_members
+    const { data: teamMember, error: teamError } = await supabase
+      .from('team_members')
+      .select('role', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    if (teamError) {
+      console.error('Error fetching team member role:', teamError)
+      return null
+    }
+
+    return teamMember?.role ?? null
+  } catch (error) {
+    console.error('Error in getTeamMemberRole:', error)
     return null
   }
-
-  return data?.role ?? null
 }
 
 export function useTeamMemberRole(userId: string | undefined) {

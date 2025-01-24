@@ -1,234 +1,223 @@
 import { useState } from 'react'
+import { Plus, Search, Command } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
 import {
-  Command,
+  CommandDialog,
   CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
   CommandList,
+  CommandSeparator,
+  CommandShortcut,
 } from '@/components/ui/command'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Lightning, Plus, Search } from 'lucide-react'
-import { useSupabase } from '@/lib/supabase/client'
-import { cn } from '@/lib/utils'
 
 interface QuickResponse {
   id: string
   title: string
   content: string
   shortcut?: string
+  category: string
 }
 
 interface QuickResponsesProps {
   onSelect: (content: string) => void
-  className?: string
 }
 
-export function QuickResponses({ onSelect, className }: QuickResponsesProps) {
+// Mock data - replace with actual data from database
+const mockResponses: QuickResponse[] = [
+  {
+    id: '1',
+    title: 'Greeting',
+    content: 'Hi there! How can I help you today?',
+    shortcut: '/hi',
+    category: 'general',
+  },
+  {
+    id: '2',
+    title: 'Thank You',
+    content: 'Thank you for contacting us. Have a great day!',
+    shortcut: '/ty',
+    category: 'general',
+  },
+]
+
+export function QuickResponses({ onSelect }: QuickResponsesProps) {
   const [isCreating, setIsCreating] = useState(false)
-  const [title, setTitle] = useState('')
-  const [content, setContent] = useState('')
-  const [shortcut, setShortcut] = useState('')
-  const [isSearchOpen, setIsSearchOpen] = useState(false)
-  const { supabase } = useSupabase()
+  const [search, setSearch] = useState('')
+  const [newResponse, setNewResponse] = useState({
+    title: '',
+    content: '',
+    shortcut: '',
+    category: 'general',
+  })
 
-  // Mock data - replace with real data from Supabase
-  const responses: QuickResponse[] = [
-    {
-      id: '1',
-      title: 'Greeting',
-      content: 'Hi there! How can I help you today?',
-      shortcut: '/hi',
+  // Filter responses based on search
+  const filteredResponses = mockResponses.filter(
+    (response) =>
+      response.title.toLowerCase().includes(search.toLowerCase()) ||
+      response.content.toLowerCase().includes(search.toLowerCase()) ||
+      response.shortcut?.toLowerCase().includes(search.toLowerCase())
+  )
+
+  // Group responses by category
+  const groupedResponses = filteredResponses.reduce(
+    (acc, response) => {
+      if (!acc[response.category]) {
+        acc[response.category] = []
+      }
+      acc[response.category].push(response)
+      return acc
     },
-    {
-      id: '2',
-      title: 'Thank You',
-      content: 'Thank you for contacting us. Is there anything else I can help you with?',
-      shortcut: '/ty',
-    },
-  ]
+    {} as Record<string, QuickResponse[]>
+  )
 
-  const handleCreate = async () => {
-    if (!title || !content) return
-
-    try {
-      const { data, error } = await supabase
-        .from('chat_quick_responses')
-        .insert({
-          title,
-          content,
-          shortcut: shortcut || null,
-        })
-        .select()
-        .single()
-
-      if (error) throw error
-
-      // Reset form
-      setTitle('')
-      setContent('')
-      setShortcut('')
-      setIsCreating(false)
-    } catch (error) {
-      console.error('Error creating quick response:', error)
-    }
-  }
-
-  const handleSelect = (response: QuickResponse) => {
-    onSelect(response.content)
-    setIsSearchOpen(false)
+  const handleCreate = () => {
+    // TODO: Save to database
+    console.log('Creating quick response:', newResponse)
+    setIsCreating(false)
+    setNewResponse({
+      title: '',
+      content: '',
+      shortcut: '',
+      category: 'general',
+    })
   }
 
   return (
-    <div className={className}>
-      {/* Quick Access Button */}
-      <Popover open={isSearchOpen} onOpenChange={setIsSearchOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-2"
-          >
-            <Lightning className="h-4 w-4" />
-            <span className="hidden sm:inline">Quick Responses</span>
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent
-          className="w-[300px] p-0"
-          align="end"
-        >
-          <Command>
-            <CommandInput placeholder="Search responses..." />
-            <CommandList>
-              <CommandEmpty>No responses found.</CommandEmpty>
-              <CommandGroup>
-                {responses.map((response) => (
-                  <CommandItem
-                    key={response.id}
-                    onSelect={() => handleSelect(response)}
-                    className="flex flex-col items-start gap-1"
-                  >
-                    <div className="flex w-full items-center justify-between">
-                      <span className="font-medium">{response.title}</span>
-                      {response.shortcut && (
-                        <span className="text-xs text-muted-foreground">
-                          {response.shortcut}
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-sm text-muted-foreground line-clamp-1">
-                      {response.content}
-                    </span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
+    <div className="relative">
+      <Button
+        variant="outline"
+        size="sm"
+        className="w-full justify-start gap-2"
+        onClick={() => setSearch('')}
+      >
+        <Command className="h-4 w-4" />
+        <span>Quick Responses</span>
+      </Button>
 
-      {/* Create Dialog */}
+      <CommandDialog>
+        <CommandInput
+          placeholder="Search quick responses..."
+          value={search}
+          onValueChange={setSearch}
+        />
+        <CommandList>
+          <CommandEmpty>No quick responses found.</CommandEmpty>
+          {Object.entries(groupedResponses).map(([category, responses]) => (
+            <CommandGroup key={category} heading={category}>
+              {responses.map((response) => (
+                <CommandItem
+                  key={response.id}
+                  onSelect={() => {
+                    onSelect(response.content)
+                    setSearch('')
+                  }}
+                >
+                  <span>{response.title}</span>
+                  {response.shortcut && (
+                    <CommandShortcut>{response.shortcut}</CommandShortcut>
+                  )}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          ))}
+          <CommandSeparator />
+          <CommandGroup>
+            <CommandItem onSelect={() => setIsCreating(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create new quick response
+            </CommandItem>
+          </CommandGroup>
+        </CommandList>
+      </CommandDialog>
+
       <Dialog open={isCreating} onOpenChange={setIsCreating}>
-        <DialogTrigger asChild>
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">New Response</span>
-          </Button>
-        </DialogTrigger>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create Quick Response</DialogTitle>
-            <DialogDescription>
-              Add a new quick response to use in your chats.
-            </DialogDescription>
           </DialogHeader>
-
           <div className="space-y-4">
             <div className="space-y-2">
               <label
                 htmlFor="title"
-                className="text-sm font-medium"
+                className="text-sm font-medium text-foreground"
               >
                 Title
               </label>
               <Input
                 id="title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                value={newResponse.title}
+                onChange={(e) =>
+                  setNewResponse((prev) => ({ ...prev, title: e.target.value }))
+                }
                 placeholder="e.g., Greeting"
               />
             </div>
-
             <div className="space-y-2">
               <label
                 htmlFor="content"
-                className="text-sm font-medium"
+                className="text-sm font-medium text-foreground"
               >
                 Response Content
               </label>
-              <Textarea
+              <Input
                 id="content"
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder="Type your response..."
-                className="min-h-[100px]"
+                value={newResponse.content}
+                onChange={(e) =>
+                  setNewResponse((prev) => ({ ...prev, content: e.target.value }))
+                }
+                placeholder="e.g., Hi there! How can I help you today?"
               />
             </div>
-
             <div className="space-y-2">
               <label
                 htmlFor="shortcut"
-                className="text-sm font-medium"
+                className="text-sm font-medium text-foreground"
               >
-                Shortcut (optional)
+                Shortcut (Optional)
               </label>
               <Input
                 id="shortcut"
-                value={shortcut}
-                onChange={(e) => setShortcut(e.target.value)}
+                value={newResponse.shortcut}
+                onChange={(e) =>
+                  setNewResponse((prev) => ({ ...prev, shortcut: e.target.value }))
+                }
                 placeholder="e.g., /greeting"
               />
-              <p className="text-xs text-muted-foreground">
-                Start with / to create a shortcut command
-              </p>
             </div>
-          </div>
-
-          <DialogFooter>
+            <div className="space-y-2">
+              <label
+                htmlFor="category"
+                className="text-sm font-medium text-foreground"
+              >
+                Category
+              </label>
+              <Input
+                id="category"
+                value={newResponse.category}
+                onChange={(e) =>
+                  setNewResponse((prev) => ({ ...prev, category: e.target.value }))
+                }
+                placeholder="e.g., general"
+              />
+            </div>
             <Button
-              variant="outline"
-              onClick={() => setIsCreating(false)}
-            >
-              Cancel
-            </Button>
-            <Button
+              className="w-full"
               onClick={handleCreate}
-              disabled={!title || !content}
+              disabled={!newResponse.title || !newResponse.content}
             >
-              Create Response
+              Create Quick Response
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

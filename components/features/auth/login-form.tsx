@@ -25,6 +25,7 @@ import {
 import { toast } from "sonner"
 import { UserRole } from "@/types/auth"
 import { authService } from "@/lib/supabase/domain/auth/service"
+import { ROUTES } from "@/lib/constants/routes"
 
 const formSchema = z.object({
   email: z.string().email({
@@ -70,13 +71,13 @@ export function LoginForm() {
       // Role-based redirect
       switch (values.role) {
         case "admin":
-          router.push("/dashboard/admin")
+          router.push(ROUTES.admin.overview)
           break
         case "agent":
-          router.push("/dashboard/agent")
+          router.push(ROUTES.agent.workspace)
           break
         default:
-          router.push("/dashboard")
+          router.push(ROUTES.dashboard.home)
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Invalid credentials")

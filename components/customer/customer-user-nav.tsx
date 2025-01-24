@@ -15,6 +15,7 @@ import { authClient } from "@/lib/auth/auth-client"
 import { ROUTES } from "@/lib/constants/routes"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
+import Link from "next/link"
 
 interface User {
   email: string
@@ -74,8 +75,15 @@ export function CustomerUserNav() {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem>Profile</DropdownMenuItem>
-          <DropdownMenuItem>Settings</DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link href={ROUTES.dashboard.settings}>Profile</Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link href="/kb">Knowledge Base</Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link href={ROUTES.dashboard.settings}>Settings</Link>
+          </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleSignOut}>

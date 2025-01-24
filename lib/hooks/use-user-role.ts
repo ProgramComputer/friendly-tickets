@@ -23,32 +23,42 @@ export function useUserRole() {
           return
         }
 
-        // First check if user is a team member (admin or agent)
+        // First try to get role from team_members with proper error handling
         const { data: teamMember, error: teamError } = await supabase
           .from('team_members')
           .select('role')
           .eq('user_id', session.user.id)
-          .single()
+          .maybeSingle() // Use maybeSingle instead of single to avoid 406 errors
 
-        if (teamMember && mounted) {
+        if (teamError && teamError.code !== 'PGRST116') {
+          console.error('Error fetching team member:', teamError)
+          throw teamError
+        }
+
+        if (teamMember?.role && mounted) {
           setRole(teamMember.role as UserRole)
           setIsLoading(false)
           return
         }
 
-        // If not a team member, check if they're a customer
+        // If not a team member, check customers with proper error handling
         const { data: customer, error: customerError } = await supabase
           .from('customers')
-          .select()
+          .select('id')
           .eq('user_id', session.user.id)
-          .single()
+          .maybeSingle() // Use maybeSingle instead of single
+
+        if (customerError && customerError.code !== 'PGRST116') {
+          console.error('Error fetching customer:', customerError)
+          throw customerError
+        }
 
         if (mounted) {
           setRole(customer ? 'customer' : null)
           setIsLoading(false)
         }
       } catch (error) {
-        console.error('Error fetching user role:', error)
+        console.error('Error in fetchUserRole:', error)
         if (mounted) {
           setRole(null)
           setIsLoading(false)
@@ -68,24 +78,34 @@ export function useUserRole() {
       } else if (event === 'SIGNED_IN' && session) {
         try {
           // Check team members first
-          const { data: teamMember } = await supabase
+          const { data: teamMember, error: teamError } = await supabase
             .from('team_members')
             .select('role')
             .eq('user_id', session.user.id)
-            .single()
+            .maybeSingle()
 
-          if (teamMember && mounted) {
+          if (teamError && teamError.code !== 'PGRST116') {
+            console.error('Error fetching team member:', teamError)
+            throw teamError
+          }
+
+          if (teamMember?.role && mounted) {
             setRole(teamMember.role as UserRole)
             setIsLoading(false)
             return
           }
 
           // Then check customers
-          const { data: customer } = await supabase
+          const { data: customer, error: customerError } = await supabase
             .from('customers')
-            .select()
+            .select('id')
             .eq('user_id', session.user.id)
-            .single()
+            .maybeSingle()
+
+          if (customerError && customerError.code !== 'PGRST116') {
+            console.error('Error fetching customer:', customerError)
+            throw customerError
+          }
 
           if (mounted) {
             setRole(customer ? 'customer' : null)

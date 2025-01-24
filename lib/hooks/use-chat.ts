@@ -1,163 +1,381 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
-import { io, Socket } from 'socket.io-client'
-import { create } from 'zustand'
-import { useSupabase } from '@/lib/supabase/client'
+'use client'
 
-// Chat store types
+import { useEffect, useState } from 'react'
+import { useSupabase } from '@/lib/supabase/client'
+import { useToast } from '@/hooks/use-toast'
+import { useRealtime } from './use-realtime'
+import { uploadFile } from '@/lib/services/file-upload'
+import type { ChatMessage } from '@/types/chat'
+import { PostgrestError } from '@supabase/supabase-js'
+
 interface Message {
   id: string
+  session_id: string
+  sender_id: string
+  sender_type: 'customer' | 'agent' | 'system'
   content: string
-  senderId: string
-  recipientId: string
-  timestamp: string
+  created_at: string
+  attachment_url?: string
+  attachment_type?: string
+  attachment_name?: string
+  is_internal: boolean
 }
 
-interface ChatState {
-  messages: Message[]
-  onlineUsers: Set<string>
-  typingUsers: Set<string>
-  addMessage: (message: Message) => void
-  setOnlineStatus: (userId: string, isOnline: boolean) => void
-  setTypingStatus: (userId: string, isTyping: boolean) => void
+interface ChatSession {
+  id: string
+  customer_id: string
+  agent_id?: string
+  status: 'pending' | 'active' | 'ended' | 'transferred'
 }
 
-// Create chat store
-const useChatStore = create<ChatState>((set) => ({
-  messages: [],
-  onlineUsers: new Set(),
-  typingUsers: new Set(),
-  addMessage: (message) =>
-    set((state) => ({
-      messages: [...state.messages, message],
-    })),
-  setOnlineStatus: (userId, isOnline) =>
-    set((state) => {
-      const newOnlineUsers = new Set(state.onlineUsers)
-      if (isOnline) {
-        newOnlineUsers.add(userId)
-      } else {
-        newOnlineUsers.delete(userId)
-      }
-      return { onlineUsers: newOnlineUsers }
-    }),
-  setTypingStatus: (userId, isTyping) =>
-    set((state) => {
-      const newTypingUsers = new Set(state.typingUsers)
-      if (isTyping) {
-        newTypingUsers.add(userId)
-      } else {
-        newTypingUsers.delete(userId)
-      }
-      return { typingUsers: newTypingUsers }
-    }),
-}))
+export function useChat(sessionId: string) {
+  const supabase = useSupabase()
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<Error | null>(null)
+  const [chatSession, setChatSession] = useState<ChatSession | null>(null)
+  const [onlineUsers, setOnlineUsers] = useState<Record<string, any>>({})
+  const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({})
+  const { toast } = useToast()
 
-// Chat hook
-export function useChat() {
-  const socketRef = useRef<Socket>()
-  const { session } = useSupabase()
-  const [isConnected, setIsConnected] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  
-  const {
-    messages,
-    onlineUsers,
-    typingUsers,
-    addMessage,
-    setOnlineStatus,
-    setTypingStatus,
-  } = useChatStore()
-
-  // Initialize socket connection
-  useEffect(() => {
-    if (!session?.user) return
-
-    const socket = io(process.env.NEXT_PUBLIC_BASE_URL!, {
-      path: '/api/socket',
-      auth: {
-        token: session.access_token,
-      },
-    })
-
-    socketRef.current = socket
-
-    socket.on('connect', () => {
-      setIsConnected(true)
-      setError(null)
-    })
-
-    socket.on('disconnect', () => {
-      setIsConnected(false)
-    })
-
-    socket.on('error', ({ message }) => {
-      setError(message)
-    })
-
-    socket.on('message', (data) => {
-      addMessage({
-        id: crypto.randomUUID(),
-        ...data,
-        recipientId: session.user.id,
+  // Function to get relevant KB articles based on message
+  async function getRelevantKBArticles(message: string) {
+    try {
+      const { data: articles, error } = await supabase.rpc('match_kb_articles', {
+        query_embedding: message,
+        match_threshold: 0.7,
+        match_count: 3
       })
-    })
 
-    socket.on('presence', ({ userId, status }) => {
-      setOnlineStatus(userId, status === 'online')
-    })
+      if (error) throw error
+      return articles
+    } catch (err) {
+      console.error('Error getting relevant articles:', err)
+      return []
+    }
+  }
 
-    socket.on('typing', ({ userId, isTyping }) => {
-      setTypingStatus(userId, isTyping)
-    })
+  // Function to generate AI response
+  async function generateAIResponse(message: string) {
+    try {
+      // Get relevant KB articles for context
+      const relevantArticles = await getRelevantKBArticles(message)
+      const context = relevantArticles
+        .map(article => `${article.title}\n${article.content}`)
+        .join('\n\n')
+
+      // Call OpenAI endpoint
+      const response = await fetch('/api/chat/ai-response', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          context,
+          sessionId
+        })
+      })
+
+      if (!response.ok) throw new Error('Failed to generate AI response')
+      const { content } = await response.json()
+
+      // Send AI response as a message
+      const { error: msgError } = await supabase
+        .from('chat_messages')
+        .insert({
+          session_id: sessionId,
+          content,
+          sender_type: 'ai',
+          sender_id: 'ai-assistant'
+        })
+
+      if (msgError) throw msgError
+
+    } catch (err) {
+      console.error('Error generating AI response:', err)
+      toast({
+        title: 'Error',
+        description: 'Failed to generate AI response. A human agent will assist you shortly.',
+        variant: 'destructive'
+      })
+    }
+  }
+
+  useEffect(() => {
+    let mounted = true
+
+    async function fetchMessages() {
+      try {
+        const { data, error } = await supabase
+          .from('chat_messages')
+          .select('*')
+          .eq('session_id', sessionId)
+          .order('created_at', { ascending: true })
+
+        if (error) {
+          console.error('Supabase error details:', {
+            message: error.message,
+            code: error.code,
+            details: error.details,
+            hint: error.hint
+          })
+          throw error
+        }
+
+        if (mounted) {
+          setMessages(data || [])
+          setIsLoading(false)
+        }
+      } catch (err) {
+        console.error('Error fetching messages:', err)
+        if (mounted) {
+          setError(err as Error)
+          setIsLoading(false)
+        }
+      }
+    }
+
+    // Subscribe to new messages
+    const channel = supabase
+      .channel(`chat:${sessionId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'chat_messages',
+        filter: `session_id=eq.${sessionId}`,
+      }, (payload) => {
+        const newMessage = payload.new as ChatMessage
+        setMessages(current => [...current, newMessage])
+        
+        // Generate AI response for user messages
+        if (newMessage.sender_type === 'customer') {
+          generateAIResponse(newMessage.content)
+        }
+      })
+      .subscribe()
+
+    // Initial fetch
+    fetchMessages()
 
     return () => {
-      socket.disconnect()
+      mounted = false
+      channel.unsubscribe()
     }
-  }, [session])
+  }, [sessionId, supabase])
 
-  // Send message
-  const sendMessage = useCallback(
-    (content: string, recipientId: string) => {
-      if (!socketRef.current || !session?.user) return
+  // Handle typing indicators
+  const handleTyping = (userId: string, isTyping: boolean) => {
+    setTypingUsers((prev) => ({
+      ...prev,
+      [userId]: isTyping,
+    }))
+  }
 
-      const message: Message = {
-        id: crypto.randomUUID(),
-        content,
-        senderId: session.user.id,
-        recipientId,
-        timestamp: new Date().toISOString(),
+  // Handle presence changes
+  const handlePresence = ({ joins, leaves }: { joins: Record<string, any>; leaves: Record<string, any> }) => {
+    setOnlineUsers((prev) => {
+      const next = { ...prev }
+      
+      // Add new users
+      Object.keys(joins).forEach((key) => {
+        next[key] = joins[key]
+      })
+      
+      // Remove left users
+      Object.keys(leaves).forEach((key) => {
+        delete next[key]
+      })
+      
+      return next
+    })
+  }
+
+  // Set up realtime subscriptions
+  useRealtime({
+    channelName: sessionId,
+    onMessage: (message: Message) => {
+      setMessages((prev) => [...prev, message as ChatMessage])
+    },
+    onTyping: handleTyping,
+    onPresence: handlePresence,
+  })
+
+  const sendMessage = async (content: string) => {
+    try {
+      // Validate sessionId
+      if (!sessionId || typeof sessionId !== 'string' || sessionId.trim() === '') {
+        throw new Error('Invalid session ID')
       }
 
-      socketRef.current.emit('message', {
-        content,
-        recipientId,
-      })
+      setIsLoading(true)
+      setError(null)
 
-      addMessage(message)
-    },
-    [session]
-  )
+      // Log the full response for debugging
+      const response = await supabase
+        .from('chat_messages')
+        .insert({
+          session_id: sessionId.trim(), // Ensure trimmed
+          content: content.trim(), // Trim content as well
+          sender_type: 'customer',
+          sender_id: supabase.session?.user?.id || '',
+          created_at: new Date().toISOString(),
+          is_internal: false
+        })
+        .select()
+        .single()
+
+      const { data, error: supabaseError } = response
+
+      // If we have data, update messages immediately
+      if (data) {
+        setMessages(prev => [...prev, data as ChatMessage])
+        return // Exit early on success
+      }
+
+      // Handle error cases
+      if (supabaseError) {
+        // Handle UUID validation error specifically
+        if (supabaseError.code === '22P02') {
+          throw new Error('Invalid session format. Please check your session ID.')
+        }
+
+        // Handle other errors
+        if (Object.keys(supabaseError).length > 0 && supabaseError.code !== 'PGRST116') {
+          throw supabaseError
+        }
+      }
+
+    } catch (err) {
+      const error = err as Error
+      console.error('Error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack
+      })
+      
+      setError(error)
+      toast({
+        title: 'Error sending message',
+        description: error.message || 'Failed to send message. Please try again.',
+        variant: 'destructive'
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Upload and send file
+  const sendFile = async (
+    file: File,
+    recipientId: string,
+    message?: string
+  ) => {
+    if (!sessionId) return
+
+    setIsLoading(true)
+    try {
+      // Upload file
+      const attachment = await uploadFile(file, sessionId)
+
+      // Send message with attachment
+      await sendMessage(
+        message || `Sent ${file.name}`,
+        recipientId,
+        attachment
+      )
+    } catch (error) {
+      console.error('Error sending file:', error)
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to send file',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   // Send typing indicator
-  const sendTyping = useCallback(
-    (isTyping: boolean, recipientId: string) => {
-      if (!socketRef.current) return
+  const sendTypingIndicator = async (isTyping: boolean) => {
+    if (!sessionId || !supabase.session?.user?.id) return
 
-      socketRef.current.emit('typing', {
+    const channel = supabase.channel(sessionId)
+    await channel.send({
+      type: 'broadcast',
+      event: 'typing',
+      payload: {
+        userId: supabase.session.user.id,
         isTyping,
-        recipientId,
+      },
+    })
+  }
+
+  // Delete message
+  const deleteMessage = async (messageId: string) => {
+    if (!supabase.session?.user?.id) return
+
+    try {
+      setIsLoading(true)
+
+      const { error } = await supabase
+        .from('chat_messages')
+        .delete()
+        .eq('id', messageId)
+        .eq('sender_id', supabase.session.user.id)
+
+      if (error) throw error
+
+      setMessages((prev) => prev.filter((msg) => msg.id !== messageId))
+    } catch (error) {
+      console.error('Error deleting message:', error)
+      setIsLoading(false)
+      toast({
+        title: 'Error',
+        description: 'Failed to delete message. Please try again.',
+        variant: 'destructive',
       })
-    },
-    []
-  )
+    }
+  }
+
+  // Edit message
+  const editMessage = async (messageId: string, content: string) => {
+    if (!supabase.session?.user?.id) return
+
+    try {
+      setIsLoading(true)
+
+      const { error } = await supabase
+        .from('chat_messages')
+        .update({ content })
+        .eq('id', messageId)
+        .eq('sender_id', supabase.session.user.id)
+
+      if (error) throw error
+
+      setMessages((prev) => prev.map((msg) =>
+        msg.id === messageId ? { ...msg, content } : msg
+      ))
+    } catch (error) {
+      console.error('Error editing message:', error)
+      setIsLoading(false)
+      toast({
+        title: 'Error',
+        description: 'Failed to edit message. Please try again.',
+        variant: 'destructive',
+      })
+    }
+  }
 
   return {
-    isConnected,
-    error,
     messages,
+    isLoading,
+    error,
+    chatSession,
     onlineUsers,
     typingUsers,
     sendMessage,
-    sendTyping,
+    sendFile,
+    sendTypingIndicator,
+    deleteMessage,
+    editMessage,
   }
 } 

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 import { supabase } from "@/lib/supabase/client"
+import { ROUTES } from "@/lib/constants/routes"
 
 export function LoginForm() {
   const router = useRouter()
@@ -45,7 +46,13 @@ export function LoginForm() {
       }
 
       toast.success("Logged in successfully")
-      router.push(role === 'customer' ? '/tickets' : `/dashboard/${role}`)
+      if (role === 'customer') {
+        router.push(ROUTES.dashboard.tickets)
+      } else if (role === 'admin') {
+        router.push(ROUTES.admin.overview)
+      } else {
+        router.push(ROUTES.agent.workspace)
+      }
       router.refresh()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Invalid credentials")

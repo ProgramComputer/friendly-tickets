@@ -1,16 +1,23 @@
 ## Key Principles
 
+- **Route Groups and URL Paths**
+  - Route groups in parentheses (e.g., `(admin)`, `(dashboard)`) are organizational only and DO NOT appear in URLs
+  - Example: Files in `app/(admin)/departments/` are accessed at `/departments`, NOT `/admin/departments`
+  - Use route groups for:
+    - Sharing layouts between related routes
+    - Organizing routes by role/feature without affecting URL structure
+    - Separating application sections (marketing, auth, dashboard)
+  - URL paths should be clean and direct, without role prefixes
+
 - **Code Quality & Style**
   - Write concise, maintainable, and strongly typed code with accurate TypeScript implementations.
-  - Embrace functional, declarative programming. Avoid OOP and classes.
+  - Embrace Server Components by default, only use Client Components when necessary.
   - Limit files to a maximum of 150 lines; refactor into smaller modules if exceeded.
-  - Prefer iteration and modularization over duplication.
   - Use descriptive, semantic variable names with auxiliary verbs (e.g., `isLoading`, `hasError`).
   - Use lowercase with dashes for directories and files (e.g., `components/auth-wizard`).
   - Favor named exports for components.
   - Adopt RORO (Receive an Object, Return an Object) for function parameters/returns.
   - Always attain to use DRY (Don't Repeat Yourself) principles.
-  - Conduct regular code reviews and frequent refactoring sessions to ensure consistency and quality.
   - Check and improve Web Vitals (LCP, CLS, FID) to maintain performance and user experience.
 
 - **Create 'Build Notes':**
@@ -103,45 +110,48 @@ Adopt a clear, modular directory structure:
 
 ```
 ├── app/
-│   ├── (auth)/           # Auth-related routes/pages
-│   ├── (dashboard)/      # Dashboard routes/pages
-│   ├── api/              # API routes
-│   └── layout.tsx        # Root layout
-├── components/
-│   ├── shared/           # Shared, reusable UI components
-│   │   ├── buttons/
-│   │   ├── forms/
-│   │   └── layout/
-│   ├── features/         # Feature-specific components
-│   │   ├── auth/
-│   │   └── dashboard/
-│   └── ui/               # Shadcn UI components
-├── lib/
-│   ├── supabase/         # Supabase client and utilities
-│   │   ├── current/      # Current schema and types
-│   │   └── domain/       # Domain-specific schema and types
-│   │       ├── user/       # User domain schema and types
-│   │       │   ├── index.ts    # Exports all supabase utilities
-│   │       │   ├── queries.ts  # Supabase queries
-│   │       │   ├── services.ts # Supabase services
-│   │       │   └── types.ts    # Supabase types
-│   │       ├── roles/        # Roles domain schema and types
-│   │       └── ...            # Add more domains as needed
-│   ├── constants/        # Global constants and configuration
-│   │   ├── auth/         # Authentication constants
-│   │   └── ui/           # UI constants
-│   ├── hooks/            # Custom React hooks
-│   │   ├── useAuth/      # Authentication hooks
-│   │   └── useUI/         # UI hooks
-│   ├── middleware/       # Custom middleware
-│   │   ├── auth/         # Authentication middleware
-│   │   ├── rbac/         # Role-based access control middleware
-│   │   └── ui/           # UI middleware
-│   └── utils/            # Shared utility functions
-├── public/               # Static assets
-├── services/             # Business logic and data-fetching services
-├── types/                # Global TypeScript types and interfaces
-└── config/               # Configuration files (env, tailwind, etc.)
+│   ├── (marketing)/       # Public marketing pages
+│   │   └── layout.tsx      # Marketing layout
+│   │   └── page.tsx        # Landing page
+│   ├── (auth)/           # Auth-related routes
+│   │   └── layout.tsx      # Auth layout
+│   │   └── login/
+│   │   │   └── page.tsx
+│   │   └── register/
+│   │   │   └── page.tsx
+│   │   ├── (dashboard)/      # Protected dashboard routes
+│   │   │   └── layout.tsx      # Dashboard layout
+│   │   │   └── _components/    # Route-specific components
+│   │   │   └── _actions/       # Server actions
+│   │   │   └── page.tsx        # Dashboard page
+│   │   ├── _components/      # Shared app components
+│   │   ├── _lib/            # Server-only code
+│   │   │   └── auth/
+│   │   │   └── db/
+│   │   ├── api/             # Global API routes
+│   │   └── layout.tsx       # Root layout
+│   ├── components/
+│   │   ├── shared/          # Shared UI components
+│   │   │   └── buttons/
+│   │   │   └── forms/
+│   │   │   └── layout/
+│   │   ├── features/        # Feature-specific components
+│   │   │   └── auth/
+│   │   │   └── dashboard/
+│   │   └── ui/             # Shadcn UI components
+│   ├── lib/
+│   │   ├── client/         # Client-only code
+│   │   │   └── hooks/
+│   │   │   └── utils/
+│   │   ├── shared/         # Shared between client/server
+│   │   │   └── types/
+│   │   │   └── schemas/
+│   │   │   └── constants/
+│   │   └── providers.tsx    # Client providers
+│   ├── public/               # Static assets
+│   ├── services/             # Business logic and data-fetching services
+│   ├── types/                # Global TypeScript types and interfaces
+│   └── config/               # Configuration files (env, tailwind, etc.)
 ```
 
 **Naming & Organization:**
@@ -223,33 +233,22 @@ function formatInput({ input }: { input: string }) {
 
 - Fetch latest Supabase documentation from https://supabase.com/docs/reference/javascript;
 
-- **Schema Management**: Keep migrations folder under `supabase/migrations` updated with remote changes.
-- **Types Management**: Keep `database.types.ts` updated regularly with the latest schema changes.
-- **Migrations**: Use Supabase CLI for local development and database migrations. Test all changes before staging/production.
-- **RLS & RBAC**: Implement Row Level Security and role-based access control. Assign default roles in `handle_new_user` functions.
-- **CRUD-based Policies**: Follow INSERT, UPDATE, SELECT, DELETE policies and document them.
-- **Enum Tables**: Use enum tables for predefined values.
-- **Relationships**: Document all table relationships and data flows.
-- **Genql**: Use Genql for type-safe GraphQL queries against Supabase. Fetch only necessary data.
+- **Schema Management**: 
+  - ALWAYS use CLI for migrations: `npx supabase migration new <name>`
+  - Keep migrations folder under `supabase/migrations` updated with remote changes
+  - Test migrations locally before pushing: `npx supabase db reset`
+  - Push to production using: `npx supabase db push`
 
-Example user creation:
+- **Types Management**: 
+  - Generate types after schema changes: `npx supabase gen types typescript`
+  - Keep `database.types.ts` updated with latest schema
+  - Use generated types in your TypeScript code
 
-```typescript
-async function handleNewUser({ userId, email }: { userId: string; email: string }) {
-  const defaultRole = await getDefaultRole()
-  await supabase.from('profiles').insert({
-    id: userId,
-    email,
-    role_id: defaultRole.id,
-    created_at: new Date().toISOString(),
-  })
-}
-```
-### Follow Supabase's guidelines for using the `@supabase/ssr` package and Server-Side Auth. Specifically, there should be:
-
-- A utility function to create a client on the client side
-- A utility function create a client on the server side, using the Next.js `cookies` API to access the cookies. Use the latest version of the API, where `cookies` must be awaited.
-- A utility function to handle refreshing the user session in middleware.
+- **Edge Functions**: 
+  - Create using CLI: `npx supabase functions new <name>`
+  - Test locally before deployment
+  - Deploy using CLI: `npx supabase functions deploy <name>`
+  - Monitor function logs through Supabase dashboard
 
 ## Working with cookies
 
@@ -619,3 +618,482 @@ order by
   - Use service role for seeding operations.
   - Document seed data structure and purpose.
   - Include different test scenarios in seed data.
+
+## Supabase CLI Development Rules
+
+- **CLI-First Development**
+  - ALWAYS use Supabase CLI commands for database operations:
+    - `npx supabase migration new <name>` for creating migrations
+    - `npx supabase db push` for applying migrations to remote
+    - `npx supabase db reset` for local development only
+    - `npx supabase functions new <name>` for creating edge functions
+    - `npx supabase functions deploy <name>` for deploying functions
+  - NEVER modify existing migration files - create new ones for changes
+  - Generate types after schema changes: `npx supabase gen types typescript`
+  - Use `npx supabase start` for local development
+  - Test migrations locally before pushing to production
+
+- **Migration File Management**
+  - One logical change per migration file
+  - Use descriptive names: `<timestamp>_<action>_<target>.sql`
+  - Include both "up" and "down" migrations when applicable
+  - Test migrations in both directions locally
+  - Document complex migrations with clear comments
+
+- **Edge Functions Development**
+  - Create using CLI: `npx supabase functions new <name>`
+  - Test locally using `npx supabase functions serve`
+  - Deploy using CLI: `npx supabase functions deploy`
+  - Keep functions focused and single-purpose
+  - Include proper error handling and logging
+
+- **Local Development**
+  - Start services: `npx supabase start`
+  - Reset local DB: `npx supabase db reset`
+  - Test functions: `npx supabase functions serve`
+  - Generate types: `npx supabase gen types typescript`
+  - Stop services: `npx supabase stop`
+
+## Shadcn/UI Conventions
+
+- **Component Installation**
+  - ALWAYS use `npx shadcn@latest add <component>` to add new components
+  - NEVER manually copy/paste shadcn components from the website
+  - Keep all shadcn components in `components/ui/` directory
+  - Use the registry pattern for component organization
+
+- **Component Usage**
+  - Import UI components from `@/components/ui/` (e.g., `import { Button } from "@/components/ui/button"`)
+  - Use the `cn()` utility from `@/lib/utils` for conditional classes
+  - Follow the hook pattern for complex components (e.g., `use-toast` from `@/hooks/use-toast`)
+  - Keep component variants in the components themselves, not in consuming code
+
+- **Styling**
+  - Use Tailwind CSS classes following shadcn/ui conventions
+  - Maintain consistent spacing using the spacing scale
+  - Use semantic color tokens (e.g., `primary`, `muted`, `accent`) over direct colors
+  - Follow mobile-first responsive design patterns
+
+- **State Management**
+  - Use hooks for complex state (e.g., `useToast`, `useMediaQuery`)
+  - Keep state close to where it's used
+  - Follow controlled component patterns when needed
+
+- **Accessibility**
+  - Maintain ARIA attributes as implemented in shadcn components
+  - Use semantic HTML elements
+  - Ensure keyboard navigation works as expected
+  - Preserve focus management implementations
+
+## Component Organization
+
+- **Registry Pattern**
+  - Keep all shadcn base components in `components/ui/`
+  - Organize feature-specific components in `components/features/`
+  - Place shared layout components in `components/layout/`
+  - Use `components/shared/` for reusable business components
+
+- **File Structure**
+  - Name component files in kebab-case (e.g., `date-picker.tsx`)
+  - Co-locate component types in the same file
+  - Keep component variants in the component file
+  - Place component-specific hooks in a parallel `hooks` directory
+
+- **Component Composition**
+  - Use composition over inheritance
+  - Create small, focused components
+  - Implement compound components with context where appropriate
+  - Follow the "slots" pattern for complex components
+
+- **Documentation**
+  - Add JSDoc comments for component props
+  - Include usage examples in comments
+  - Document any non-obvious behavior
+  - Note accessibility considerations
+
+## Component Variants
+
+- **Using cva (Class Variance Authority)**
+  - Define variants using `cva` from `class-variance-authority`
+  - Keep variant definitions at the top of component files
+  - Use semantic names for variants
+  - Example structure:
+    ```typescript
+    const buttonVariants = cva(
+      "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background",
+      {
+        variants: {
+          variant: {
+            default: "bg-primary text-primary-foreground hover:bg-primary/90",
+            destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+            outline: "border border-input hover:bg-accent hover:text-accent-foreground",
+          },
+          size: {
+            default: "h-10 py-2 px-4",
+            sm: "h-9 px-3 rounded-md",
+            lg: "h-11 px-8 rounded-md",
+          },
+        },
+        defaultVariants: {
+          variant: "default",
+          size: "default",
+        },
+      }
+    )
+    ```
+
+## Hooks and State Management
+
+- **Hook Organization**
+  - Place reusable hooks in `hooks/` directory
+  - Name hooks with `use` prefix (e.g., `use-toast.ts`)
+  - Keep component-specific hooks close to their components
+  - Follow the pattern:
+    ```typescript
+    export function useHookName(params?: HookParams) {
+      // State
+      const [state, setState] = useState<StateType>()
+      
+      // Effects
+      useEffect(() => {
+        // Side effects
+      }, [dependencies])
+      
+      // Callbacks
+      const handleEvent = useCallback(() => {
+        // Event handling
+      }, [dependencies])
+      
+      return {
+        state,
+        handleEvent,
+      }
+    }
+    ```
+
+- **State Management Patterns**
+  - Use `useState` for simple component state
+  - Use `useReducer` for complex state logic
+  - Implement context for shared state:
+    ```typescript
+    interface ContextType {
+      state: StateType
+      dispatch: Dispatch<ActionType>
+    }
+    
+    const ComponentContext = createContext<ContextType | undefined>(undefined)
+    
+    export function ComponentProvider({ children }: PropsWithChildren) {
+      const [state, dispatch] = useReducer(reducer, initialState)
+      return (
+        <ComponentContext.Provider value={{ state, dispatch }}>
+          {children}
+        </ComponentContext.Provider>
+      )
+    }
+    
+    export function useComponentContext() {
+      const context = useContext(ComponentContext)
+      if (!context) {
+        throw new Error("useComponentContext must be used within ComponentProvider")
+      }
+      return context
+    }
+    ```
+
+- **Form Management**
+  - Use `useForm` from `react-hook-form` with zod validation
+  - Follow the pattern:
+    ```typescript
+    const formSchema = z.object({
+      field: z.string().min(2).max(50),
+    })
+    
+    export function FormComponent() {
+      const form = useForm<z.infer<typeof formSchema>>({
+        resolver: zodResolver(formSchema),
+        defaultValues: {
+          field: "",
+        },
+      })
+    
+      function onSubmit(values: z.infer<typeof formSchema>) {
+        // Handle submission
+      }
+    
+      return (
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            {/* Form fields */}
+          </form>
+        </Form>
+      )
+    }
+    ```
+
+- **Dialog/Modal State**
+  - Use the shadcn/ui pattern with controlled state:
+    ```typescript
+    export function DialogComponent() {
+      const [open, setOpen] = useState(false)
+      
+      return (
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button>Open</Button>
+          </DialogTrigger>
+          <DialogContent>
+            {/* Dialog content */}
+          </DialogContent>
+        </Dialog>
+      )
+    }
+    ```
+
+## Accessibility and Keyboard Navigation
+
+- **ARIA Attributes**
+  - Use semantic HTML elements whenever possible
+  - Add descriptive ARIA labels for non-semantic elements
+  - Follow shadcn/ui's built-in ARIA patterns
+  - Example:
+    ```typescript
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button aria-label="Open settings">
+          <Settings className="h-4 w-4" aria-hidden="true" />
+          Settings
+        </Button>
+      </DialogTrigger>
+      <DialogContent aria-describedby="dialog-description">
+        <DialogHeader>
+          <DialogTitle>Settings</DialogTitle>
+          <DialogDescription id="dialog-description">
+            Adjust your preferences
+          </DialogDescription>
+        </DialogHeader>
+      </DialogContent>
+    </Dialog>
+    ```
+
+- **Keyboard Navigation**
+  - Ensure all interactive elements are focusable
+  - Maintain logical tab order
+  - Support standard keyboard shortcuts:
+    - Enter/Space for buttons and links
+    - Escape to close modals/dropdowns
+    - Arrow keys for navigation within components
+  - Example:
+    ```typescript
+    export function NavigableList() {
+      const [activeIndex, setActiveIndex] = useState(0)
+      
+      function handleKeyDown(e: React.KeyboardEvent) {
+        switch (e.key) {
+          case "ArrowDown":
+            setActiveIndex(prev => Math.min(prev + 1, items.length - 1))
+            break
+          case "ArrowUp":
+            setActiveIndex(prev => Math.max(prev - 1, 0))
+            break
+        }
+      }
+      
+      return (
+        <ul role="listbox" onKeyDown={handleKeyDown}>
+          {items.map((item, index) => (
+            <li
+              key={item.id}
+              role="option"
+              tabIndex={index === activeIndex ? 0 : -1}
+              aria-selected={index === activeIndex}
+            >
+              {item.label}
+            </li>
+          ))}
+        </ul>
+      )
+    }
+    ```
+
+- **Focus Management**
+  - Use `useRef` and `focus()` for programmatic focus
+  - Implement focus trapping in modals
+  - Return focus to trigger elements
+  - Example:
+    ```typescript
+    export function FocusableComponent() {
+      const triggerRef = useRef<HTMLButtonElement>(null)
+      const contentRef = useRef<HTMLDivElement>(null)
+      
+      function onOpen() {
+        contentRef.current?.focus()
+      }
+      
+      function onClose() {
+        triggerRef.current?.focus()
+      }
+      
+      return (
+        <>
+          <Button ref={triggerRef}>Open</Button>
+          <div 
+            ref={contentRef}
+            tabIndex={-1}
+            onKeyDown={e => e.key === "Escape" && onClose()}
+          >
+            Content
+          </div>
+        </>
+      )
+    }
+    ```
+
+- **Color Contrast**
+  - Ensure sufficient color contrast (WCAG AA)
+  - Use semantic color tokens from shadcn/ui
+  - Provide visual indicators for focus/hover states
+  - Example:
+    ```typescript
+    <Button
+      className={cn(
+        "focus-visible:ring-2 focus-visible:ring-offset-2",
+        "hover:bg-primary/90",
+        "active:scale-95"
+      )}
+    >
+      Click Me
+    </Button>
+    ```
+
+## Styling and Theming
+
+- **Color Tokens**
+  - Use semantic color tokens from shadcn/ui theme
+  - Follow the naming pattern:
+    - `primary` - Main brand color
+    - `secondary` - Supporting color
+    - `accent` - Highlight color
+    - `destructive` - Error/danger color
+    - `muted` - Subdued/background color
+  - Example:
+    ```typescript
+    <div className="bg-background text-foreground">
+      <Button className="bg-primary hover:bg-primary/90">
+        Primary Action
+      </Button>
+      <Button variant="destructive">
+        Delete
+      </Button>
+    </div>
+    ```
+
+- **Typography**
+  - Use consistent font sizes and weights
+  - Follow the scale:
+    ```typescript
+    text-xs      // 0.75rem
+    text-sm      // 0.875rem
+    text-base    // 1rem
+    text-lg      // 1.125rem
+    text-xl      // 1.25rem
+    text-2xl     // 1.5rem
+    text-3xl     // 1.875rem
+    text-4xl     // 2.25rem
+    ```
+  - Example:
+    ```typescript
+    <div className="space-y-2">
+      <h1 className="scroll-m-20 text-4xl font-extrabold tracking-tight">
+        Heading 1
+      </h1>
+      <h2 className="scroll-m-20 text-3xl font-semibold tracking-tight">
+        Heading 2
+      </h2>
+      <p className="leading-7 [&:not(:first-child)]:mt-6">
+        Body text
+      </p>
+    </div>
+    ```
+
+- **Spacing**
+  - Use consistent spacing scale
+  - Follow the pattern:
+    ```typescript
+    p-1         // 0.25rem
+    p-2         // 0.5rem
+    p-3         // 0.75rem
+    p-4         // 1rem
+    p-5         // 1.25rem
+    p-6         // 1.5rem
+    ```
+  - Example:
+    ```typescript
+    <div className="space-y-4 p-6">
+      <div className="rounded-lg border p-4">
+        Content with consistent spacing
+      </div>
+    </div>
+    ```
+
+- **Component Variants**
+  - Use `cva` for component variants
+  - Define variants at the top of component files
+  - Follow the pattern:
+    ```typescript
+    const buttonVariants = cva(
+      "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background",
+      {
+        variants: {
+          variant: {
+            default: "bg-primary text-primary-foreground hover:bg-primary/90",
+            destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+            outline: "border border-input hover:bg-accent hover:text-accent-foreground",
+            secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+            ghost: "hover:bg-accent hover:text-accent-foreground",
+            link: "underline-offset-4 hover:underline text-primary",
+          },
+          size: {
+            default: "h-10 py-2 px-4",
+            sm: "h-9 px-3 rounded-md",
+            lg: "h-11 px-8 rounded-md",
+          },
+        },
+        defaultVariants: {
+          variant: "default",
+          size: "default",
+        },
+      }
+    )
+    ```
+
+- **Dark Mode**
+  - Use CSS variables for theme values
+  - Support both light and dark modes
+  - Example:
+    ```typescript
+    <div className="bg-background dark:bg-slate-950">
+      <div className="text-foreground dark:text-slate-50">
+        Content that adapts to theme
+      </div>
+    </div>
+    ```
+
+- **Responsive Design**
+  - Use mobile-first approach
+  - Follow breakpoint pattern:
+    ```typescript
+    sm: "640px"
+    md: "768px"
+    lg: "1024px"
+    xl: "1280px"
+    2xl: "1536px"
+    ```
+  - Example:
+    ```typescript
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <Card className="p-4 md:p-6">
+        Responsive content
+      </Card>
+    </div>
+    ```

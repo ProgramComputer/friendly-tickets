@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
   Ticket,
   TicketListParams,
   CreateTicketInput,
   UpdateTicketInput,
+  TicketListResponse,
 } from '@/types/tickets'
 import {
   getTickets,
@@ -17,6 +18,7 @@ import {
 } from '@/lib/supabase/domain/tickets/queries'
 import { createBrowserClient } from '@supabase/ssr'
 import { Database } from '@/lib/supabase/database.types'
+import { useSupabase } from '@/lib/supabase/client'
 
 // Query keys
 export const ticketKeys = {
@@ -63,34 +65,35 @@ export function useTeamMemberRole(userId: string | undefined) {
 
 // Hooks
 export function useTickets(params: TicketListParams) {
-  const queryClient = useQueryClient()
+  const supabase = useSupabase()
+  
+  return useInfiniteQuery({
+    queryKey: ['tickets', params],
+    queryFn: async ({ pageParam }) => {
+      const { data, error } = await supabase
+        .from('tickets')
+        .select(`
+          *,
+          customer:customers!customer_id(*),
+          assignee:team_members!assignee_id(*),
+          department:departments!department_id(*),
+          messages:ticket_messages(count)
+        `)
+        .order(params.sort?.field || 'created_at', { 
+          ascending: params.sort?.direction === 'asc' 
+        })
+        .range(pageParam || 0, (pageParam || 0) + 9)
 
-  const query = useInfiniteQuery({
-    queryKey: ticketKeys.list(params),
-    queryFn: ({ pageParam }) =>
-      getTickets({ ...params, cursor: pageParam as string | undefined }),
-    initialPageParam: undefined as string | undefined,
+      if (error) throw error
+      
+      return {
+        tickets: data as Ticket[],
+        nextCursor: data.length === 10 ? pageParam + 10 : undefined
+      }
+    },
     getNextPageParam: (lastPage) => lastPage.nextCursor,
+    initialPageParam: 0
   })
-
-  // Subscribe to real-time updates
-  useEffect(() => {
-    const unsubscribe = subscribeToTicketUpdates(({ ticket }) => {
-      queryClient.setQueryData<Ticket[]>(
-        ticketKeys.list(params),
-        (oldData) => {
-          if (!oldData) return [ticket]
-          return oldData.map((t) => (t.id === ticket.id ? ticket : t))
-        }
-      )
-    })
-
-    return () => {
-      unsubscribe()
-    }
-  }, [params, queryClient])
-
-  return query
 }
 
 export function useTicket(id: string) {
@@ -146,59 +149,65 @@ export function useCreateTicket() {
 }
 
 export function useUpdateTicket() {
+  const supabase = useSupabase()
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id, ...data }: UpdateTicketInput & { id: string }) =>
-      updateTicket(id, data),
-    onSuccess: (ticket) => {
-      // Invalidate ticket lists
-      queryClient.invalidateQueries({
-        queryKey: ticketKeys.lists(),
-      })
+    mutationFn: async (updates: Partial<Ticket> & { id: string }) => {
+      const { data, error } = await supabase
+        .from('tickets')
+        .update(updates)
+        .eq('id', updates.id)
+        .select()
+        .single()
 
-      // Update ticket in cache
-      queryClient.setQueryData(ticketKeys.detail(ticket.id), ticket)
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tickets'] })
     },
   })
 }
 
 // Utility hook for infinite scroll
 export function useInfiniteScroll(
-  callback: () => void,
+  onIntersect: () => void,
   options: {
     threshold?: number
-    root?: Element | null
     rootMargin?: string
   } = {}
 ) {
-  const { threshold = 1, root = null, rootMargin = '0px' } = options
+  const observer = useRef<IntersectionObserver>()
+  
+  const triggerRef = useCallback(
+    (node: HTMLElement | null) => {
+      if (observer.current) observer.current.disconnect()
+      
+      observer.current = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) {
+            onIntersect()
+          }
+        },
+        {
+          threshold: options.threshold || 0,
+          rootMargin: options.rootMargin || '0px',
+        }
+      )
+
+      if (node) observer.current.observe(node)
+    },
+    [onIntersect, options.threshold, options.rootMargin]
+  )
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            callback()
-          }
-        })
-      },
-      {
-        threshold,
-        root,
-        rootMargin,
-      }
-    )
-
-    const target = document.querySelector('#infinite-scroll-trigger')
-    if (target) {
-      observer.observe(target)
-    }
-
     return () => {
-      if (target) {
-        observer.unobserve(target)
+      if (observer.current) {
+        observer.current.disconnect()
       }
     }
-  }, [callback, threshold, root, rootMargin])
+  }, [])
+
+  return triggerRef
 } 

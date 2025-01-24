@@ -102,24 +102,47 @@ export function useAuth(): UseAuthReturn {
 
   async function getRole(userId: string) {
     try {
-      const { data: teamMember, error } = await supabase
+      // First check if user is a team member
+      const { data: teamMember, error: teamError } = await supabase
         .from("team_members")
         .select("role")
         .eq("user_id", userId)
         .single()
 
-      if (error) throw error
+      if (teamError && teamError.code !== 'PGRST116') {
+        throw teamError
+      }
 
-      // If user is a team member, they're either an agent or admin
       if (teamMember) {
         setRole(teamMember.role as UserRole)
       } else {
-        // If not a team member, they're a customer
-        setRole("customer")
+        // If not a team member, check if they're a customer
+        const { data: customer, error: customerError } = await supabase
+          .from("customers")
+          .select("id")
+          .eq("user_id", userId)
+          .single()
+
+        if (customerError && customerError.code !== 'PGRST116') {
+          throw customerError
+        }
+
+        if (customer) {
+          setRole("customer")
+        } else {
+          // If neither team member nor customer, create as customer
+          const { error: createError } = await supabase
+            .from("customers")
+            .insert({ user_id: userId })
+
+          if (createError) throw createError
+          setRole("customer")
+        }
       }
     } catch (error) {
       console.error("Error fetching role:", error)
-      setRole("customer") // Default to customer on error
+      // Don't set a default role on error anymore
+      setRole(null)
     } finally {
       setIsLoading(false)
     }

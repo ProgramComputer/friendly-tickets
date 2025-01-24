@@ -12,6 +12,7 @@ export function Providers({ children }: { children: ReactNode }) {
           queries: {
             staleTime: 60 * 1000, // 1 minute
             refetchOnWindowFocus: false,
+            retry: 1,
           },
         },
       })
@@ -20,7 +21,7 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       {children}
-      <Toaster />
+      <Toaster position="top-right" expand={true} richColors />
     </QueryClientProvider>
   )
 } 

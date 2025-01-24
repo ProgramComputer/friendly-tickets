@@ -24,6 +24,7 @@ export interface TicketDetail {
   department?: {
     id: string
     name: string
+    description?: string
   }
   created_at: string
   updated_at: string
@@ -43,14 +44,12 @@ interface UpdateTicketInput {
 async function getTicketDetail(id: string): Promise<TicketDetail> {
   const { data, error } = await supabase
     .from('tickets')
-    .select(
-      `
+    .select(`
       *,
-      customer:profiles!customer_id(*),
-      assignee:team_members(*),
-      department:departments(*)
-      `
-    )
+      customer:customers!customer_id(*),
+      assignee:team_members!assignee_id(*),
+      department:departments!department_id(*)
+    `)
     .eq('id', id)
     .single()
 
@@ -77,14 +76,12 @@ async function updateTicket(
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)
-    .select(
-      `
+    .select(`
       *,
-      customer:profiles!customer_id(*),
-      assignee:team_members(*),
-      department:departments(*)
-      `
-    )
+      customer:customers!customer_id(*),
+      assignee:team_members!assignee_id(*),
+      department:departments!department_id(*)
+    `)
     .single()
 
   if (error) {
@@ -95,22 +92,20 @@ async function updateTicket(
 }
 
 export function useTicketDetail(id: string) {
-  const queryClient = useQueryClient()
-
-  const query = useQuery({
-    queryKey: ['tickets', id],
+  return useQuery({
+    queryKey: ['ticket', id],
     queryFn: () => getTicketDetail(id),
   })
+}
 
-  const updateMutation = useMutation({
-    mutationFn: (input: UpdateTicketInput) => updateTicket(id, input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tickets', id] })
+export function useUpdateTicketDetail() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, ...input }: UpdateTicketInput & { id: string }) =>
+      updateTicket(id, input),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['ticket', data.id], data)
     },
   })
-
-  return {
-    ...query,
-    updateTicket: updateMutation.mutateAsync,
-  }
 } 

@@ -1,260 +1,291 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useChat } from '@/lib/hooks/use-chat'
-import { ChatContainer } from './chat-container'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import {
-  Users,
   Clock,
   MessageSquare,
-  UserCheck,
-  PhoneCall,
+  CheckCircle,
+  User,
   Mail,
-  BarChart,
-  Settings,
+  Phone,
+  Calendar,
+  Tag,
+  MoreHorizontal,
+  Filter,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { ChatContainer } from './chat-container'
+import { QuickResponses } from './quick-responses'
+import { useSupabase } from '@/lib/supabase/client'
+import { getActiveSessions } from '@/lib/services/chat-session'
 
 interface AgentWorkspaceProps {
   className?: string
 }
 
-export function AgentWorkspace({ className }: AgentWorkspaceProps) {
-  const [selectedChat, setSelectedChat] = useState<string | null>(null)
-  const { messages, onlineUsers } = useChat()
-
-  // Mock data - replace with real data
-  const activeSessions = [
-    {
-      id: '1',
-      customerName: 'John Doe',
+// Mock data - replace with real data
+const mockSessions = [
+  {
+    id: '1',
+    customer: {
+      name: 'John Doe',
       email: 'john@example.com',
       status: 'active',
       waitTime: '2m',
       lastMessage: 'I need help with my order',
     },
-    {
-      id: '2',
-      customerName: 'Jane Smith',
+  },
+  {
+    id: '2',
+    customer: {
+      name: 'Jane Smith',
       email: 'jane@example.com',
-      status: 'pending',
+      status: 'waiting',
       waitTime: '5m',
       lastMessage: 'Where is my refund?',
     },
-  ]
+  },
+]
+
+export function AgentWorkspace({ className }: AgentWorkspaceProps) {
+  const [selectedSession, setSelectedSession] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState('active')
+  const [sessions, setSessions] = useState(mockSessions)
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set())
+  const { session } = useSupabase()
+  const { messages } = useChat(selectedSession || undefined)
+
+  // Load active sessions
+  useEffect(() => {
+    if (!session?.user?.id) return
+
+    const loadSessions = async () => {
+      try {
+        const data = await getActiveSessions(session.user.id, 'agent')
+        // TODO: Transform data to match UI requirements
+        console.log('Active sessions:', data)
+      } catch (error) {
+        console.error('Error loading sessions:', error)
+      }
+    }
+
+    loadSessions()
+  }, [session?.user?.id])
+
+  // Subscribe to presence changes
+  useEffect(() => {
+    if (!session?.user?.id) return
+
+    const channel = supabase
+      .channel('online-users')
+      .on('presence', { event: 'sync' }, () => {
+        const newState = channel.presenceState()
+        const online = new Set(Object.keys(newState))
+        setOnlineUsers(online)
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track({ user_id: session.user.id })
+        }
+      })
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [session?.user?.id])
 
   return (
-    <div className={cn('flex h-screen', className)}>
+    <div className="flex h-full">
       {/* Sidebar */}
-      <div className="flex w-16 flex-col items-center border-r bg-muted py-4">
-        <Button
-          size="icon"
-          variant="ghost"
-          className="mb-4"
-        >
-          <MessageSquare className="h-5 w-5" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-        >
-          <PhoneCall className="h-5 w-5" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-        >
-          <Mail className="h-5 w-5" />
-        </Button>
-        <div className="flex-1" />
-        <Button
-          size="icon"
-          variant="ghost"
-        >
-          <BarChart className="h-5 w-5" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-        >
-          <Settings className="h-5 w-5" />
-        </Button>
-      </div>
+      <div className="w-64 border-r bg-muted/10">
+        <div className="p-4 space-y-4">
+          {/* Action Buttons */}
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" className="w-full">
+              <Clock className="h-4 w-4 mr-2" />
+              Available
+            </Button>
+            <Button size="sm" variant="outline" className="w-10 px-0">
+              <Filter className="h-4 w-4" />
+            </Button>
+          </div>
 
-      {/* Chat List */}
-      <div className="w-80 border-r">
-        <div className="border-b p-4">
-          <Input placeholder="Search chats..." />
-        </div>
-
-        <Tabs defaultValue="active">
-          <div className="border-b px-4">
+          {/* Chat Tabs */}
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="w-full">
               <TabsTrigger value="active" className="flex-1">
                 Active
+                <Badge variant="secondary" className="ml-2">
+                  {sessions.filter((s) => s.customer.status === 'active').length}
+                </Badge>
               </TabsTrigger>
               <TabsTrigger value="waiting" className="flex-1">
                 Waiting
+                <Badge variant="secondary" className="ml-2">
+                  {sessions.filter((s) => s.customer.status === 'waiting').length}
+                </Badge>
               </TabsTrigger>
               <TabsTrigger value="closed" className="flex-1">
                 Closed
               </TabsTrigger>
             </TabsList>
-          </div>
 
-          <TabsContent value="active" className="m-0">
-            <ScrollArea className="h-[calc(100vh-8.5rem)]">
-              {activeSessions.map((session) => (
-                <button
-                  key={session.id}
-                  onClick={() => setSelectedChat(session.id)}
-                  className={cn(
-                    'flex w-full flex-col gap-1 border-b p-4 text-left hover:bg-muted/50',
-                    {
-                      'bg-muted': selectedChat === session.id,
-                    }
-                  )}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold">
-                      {session.customerName}
-                    </span>
-                    <Badge
-                      variant={session.status === 'active' ? 'default' : 'secondary'}
+            <TabsContent value="active" className="m-0">
+              <ScrollArea className="h-[calc(100vh-12rem)]">
+                {sessions
+                  .filter((s) => s.customer.status === 'active')
+                  .map((session) => (
+                    <Card
+                      key={session.id}
+                      className={`p-4 mb-2 cursor-pointer hover:bg-accent/50 ${
+                        selectedSession === session.id ? 'bg-accent' : ''
+                      }`}
+                      onClick={() => setSelectedSession(session.id)}
                     >
-                      {session.status}
-                    </Badge>
-                  </div>
-                  <span className="text-sm text-muted-foreground">
-                    {session.email}
-                  </span>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Clock className="h-3 w-3" />
-                    <span>Wait time: {session.waitTime}</span>
-                  </div>
-                  <p className="mt-1 truncate text-sm">
-                    {session.lastMessage}
-                  </p>
-                </button>
-              ))}
-            </ScrollArea>
-          </TabsContent>
-        </Tabs>
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="font-medium">{session.customer.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {session.customer.lastMessage}
+                          </div>
+                        </div>
+                        <Badge variant="outline">{session.customer.waitTime}</Badge>
+                      </div>
+                    </Card>
+                  ))}
+              </ScrollArea>
+            </TabsContent>
+
+            <TabsContent value="waiting" className="m-0">
+              <ScrollArea className="h-[calc(100vh-12rem)]">
+                {sessions
+                  .filter((s) => s.customer.status === 'waiting')
+                  .map((session) => (
+                    <Card
+                      key={session.id}
+                      className={`p-4 mb-2 cursor-pointer hover:bg-accent/50 ${
+                        selectedSession === session.id ? 'bg-accent' : ''
+                      }`}
+                      onClick={() => setSelectedSession(session.id)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="font-medium">{session.customer.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {session.customer.lastMessage}
+                          </div>
+                        </div>
+                        <Badge>{session.customer.waitTime}</Badge>
+                      </div>
+                    </Card>
+                  ))}
+              </ScrollArea>
+            </TabsContent>
+
+            <TabsContent value="closed" className="m-0">
+              <div className="p-4 text-center text-muted-foreground">
+                No closed chats
+              </div>
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
 
       {/* Chat Area */}
-      <div className="flex flex-1 flex-col">
-        {selectedChat ? (
+      <div className="flex-1">
+        {selectedSession ? (
           <ChatContainer
-            recipientId={selectedChat}
+            recipientId={selectedSession}
             recipientName={
-              activeSessions.find((s) => s.id === selectedChat)?.customerName || ''
+              sessions.find((s) => s.id === selectedSession)?.customer.name || ''
             }
           />
         ) : (
-          <div className="flex h-full items-center justify-center">
-            <Card className="mx-auto w-[400px]">
-              <CardHeader>
-                <CardTitle>Welcome to Agent Workspace</CardTitle>
-                <CardDescription>
-                  Select a chat from the list to get started
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-muted-foreground" />
-                  <span>Active visitors: {onlineUsers.size}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <MessageSquare className="h-5 w-5 text-muted-foreground" />
-                  <span>Open chats: {activeSessions.length}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <UserCheck className="h-5 w-5 text-muted-foreground" />
-                  <span>Online agents: 3</span>
-                </div>
-              </CardContent>
-            </Card>
+          <div className="h-full flex items-center justify-center text-muted-foreground">
+            <div className="text-center">
+              <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <h3 className="text-lg font-medium mb-2">No chat selected</h3>
+              <p>Select a chat from the sidebar to start messaging</p>
+            </div>
           </div>
         )}
       </div>
 
       {/* Customer Info Sidebar */}
-      {selectedChat && (
-        <div className="w-80 border-l p-4">
-          <h3 className="mb-4 font-semibold">Customer Information</h3>
-          
-          <div className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Contact Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div>
-                  <span className="text-xs text-muted-foreground">Name</span>
-                  <p className="font-medium">
-                    {activeSessions.find((s) => s.id === selectedChat)?.customerName}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-xs text-muted-foreground">Email</span>
-                  <p className="font-medium">
-                    {activeSessions.find((s) => s.id === selectedChat)?.email}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+      {selectedSession && (
+        <div className="w-64 border-l bg-muted/10">
+          <div className="p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold">Customer Info</h3>
+              <Button size="icon" variant="ghost">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Previous Interactions</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span>Total chats</span>
-                    <span className="font-medium">3</span>
+            <div className="space-y-6">
+              {/* Basic Info */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <User className="h-4 w-4" />
+                  <span>John Doe</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Mail className="h-4 w-4" />
+                  <span>john@example.com</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Phone className="h-4 w-4" />
+                  <span>+1 234 567 890</span>
+                </div>
+              </div>
+
+              {/* Previous Interactions */}
+              <div>
+                <h4 className="text-sm font-medium mb-2">Previous Chats</h4>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Calendar className="h-4 w-4" />
+                    <span>Last chat: 2 days ago</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span>Last chat</span>
-                    <span className="font-medium">2 days ago</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Average rating</span>
-                    <span className="font-medium">4.5/5</span>
+                  <div className="flex items-center gap-2 text-sm">
+                    <MessageSquare className="h-4 w-4" />
+                    <span>5 previous conversations</span>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col gap-2">
-                  <Button variant="outline" size="sm">
+              {/* Tags */}
+              <div>
+                <h4 className="text-sm font-medium mb-2">Tags</h4>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="outline" className="flex items-center gap-1">
+                    <Tag className="h-3 w-3" />
+                    VIP Customer
+                  </Badge>
+                  <Badge variant="outline" className="flex items-center gap-1">
+                    <Tag className="h-3 w-3" />
+                    Technical Issue
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Quick Actions */}
+              <div>
+                <h4 className="text-sm font-medium mb-2">Quick Actions</h4>
+                <div className="space-y-2">
+                  <Button variant="outline" size="sm" className="w-full">
                     View Order History
                   </Button>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" className="w-full">
                     Create Ticket
                   </Button>
-                  <Button variant="outline" size="sm">
-                    Add Note
-                  </Button>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
         </div>
       )}

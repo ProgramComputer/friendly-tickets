@@ -1,3 +1,5 @@
+'use client'
+
 import { cn } from '@/lib/utils'
 
 interface OnlineIndicatorProps {
@@ -5,37 +7,19 @@ interface OnlineIndicatorProps {
   className?: string
 }
 
-export function OnlineIndicator({
-  isOnline,
-  className,
-}: OnlineIndicatorProps) {
+export function OnlineIndicator({ isOnline, className }: OnlineIndicatorProps) {
   return (
     <div
       className={cn(
-        'flex items-center gap-1.5',
+        'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background',
+        {
+          'bg-green-500': isOnline,
+          'bg-muted': !isOnline,
+        },
         className
       )}
     >
-      <div
-        className={cn(
-          'h-2 w-2 rounded-full',
-          {
-            'bg-green-500': isOnline,
-            'bg-gray-300': !isOnline,
-          }
-        )}
-      />
-      <span
-        className={cn(
-          'text-xs',
-          {
-            'text-green-600': isOnline,
-            'text-muted-foreground': !isOnline,
-          }
-        )}
-      >
-        {isOnline ? 'Online' : 'Offline'}
-      </span>
+      <span className="sr-only">{isOnline ? 'Online' : 'Offline'}</span>
     </div>
   )
 } 

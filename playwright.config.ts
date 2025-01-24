@@ -1,43 +1,66 @@
-import { PlaywrightTestConfig, devices } from '@playwright/test'
+import { defineConfig, devices } from '@playwright/test'
+import path from 'path'
 
-const config: PlaywrightTestConfig = {
+// Read from environment variables
+const PORT = process.env.PORT || 3001
+const BASE_URL = `http://localhost:${PORT}`
+
+export default defineConfig({
   testDir: './tests/e2e',
-  timeout: 30000,
+  globalSetup: './tests/setup/global-setup.ts',
+  fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: process.env.CI ? 'github' : 'list',
+  reporter: 'html',
   use: {
-    baseURL: process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000',
+    baseURL: BASE_URL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
   },
+  
   projects: [
     {
+      name: 'setup',
+      testMatch: /.*\.setup\.ts/,
+    },
+    {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { 
+        ...devices['Desktop Chrome'],
+        storageState: './tests/auth/customer.json',
+      },
+      dependencies: ['setup'],
     },
     {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
+      name: 'agent',
+      use: { 
+        ...devices['Desktop Chrome'],
+        storageState: './tests/auth/agent.json',
+      },
+      dependencies: ['setup'],
     },
     {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
+      name: 'admin',
+      use: { 
+        ...devices['Desktop Chrome'],
+        storageState: './tests/auth/admin.json',
+      },
+      dependencies: ['setup'],
     },
     {
-      name: 'Mobile Chrome',
-      use: { ...devices['Pixel 5'] },
-    },
-    {
-      name: 'Mobile Safari',
-      use: { ...devices['iPhone 12'] },
+      name: 'mobile',
+      use: {
+        ...devices['iPhone 13'],
+      },
+      dependencies: ['setup'],
     },
   ],
+
   webServer: {
     command: 'npm run dev',
-    port: 3000,
+    url: BASE_URL,
     reuseExistingServer: !process.env.CI,
+    timeout: 120 * 1000,
   },
-} 
+}) 

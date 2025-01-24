@@ -11,9 +11,11 @@ import { TicketListItem } from './ticket-list-item'
 interface TicketListProps {
   params: TicketListParams
   className?: string
+  onTicketSelect?: (ticketId: string) => void
+  selectedTicketId?: string | null
 }
 
-export function TicketList({ params, className }: TicketListProps) {
+export function TicketList({ params, className, onTicketSelect, selectedTicketId }: TicketListProps) {
   const {
     data,
     isLoading,
@@ -67,7 +69,12 @@ export function TicketList({ params, className }: TicketListProps) {
       {data.pages.map((page, i) => (
         <Fragment key={i}>
           {page.tickets.map((ticket) => (
-            <TicketListItem key={ticket.id} ticket={ticket} />
+            <TicketListItem 
+              key={ticket.id} 
+              ticket={ticket} 
+              onSelect={onTicketSelect}
+              isSelected={selectedTicketId === ticket.id}
+            />
           ))}
         </Fragment>
       ))}

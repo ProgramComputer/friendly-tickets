@@ -9,6 +9,7 @@ import {
   MessageSquare,
   Settings,
   HelpCircle,
+  Book,
 } from "lucide-react"
 
 const navItems = [
@@ -23,6 +24,12 @@ const navItems = [
     title: "Support",
     href: ROUTES.tickets.create,
     icon: MessageSquare,
+  },
+  {
+    id: "knowledge-base",
+    title: "Knowledge Base",
+    href: "/kb",
+    icon: Book,
   },
   {
     id: "help",
