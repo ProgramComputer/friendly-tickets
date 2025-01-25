@@ -59,12 +59,10 @@ const nextConfig = {
 
     return config
   },
-  // Force all pages to be server-side rendered
-  output: 'standalone',
-  distDir: '.next',
-  pageExtensions: ['tsx', 'ts', 'jsx', 'js'],
-  images: {
-    unoptimized: true
+  // Disable compression and indicators
+  compress: false,
+  devIndicators: {
+    buildActivity: false
   }
 }
 

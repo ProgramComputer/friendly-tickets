@@ -1,16 +1,25 @@
 import { createBrowserClient } from '@supabase/ssr'
-import { type SupabaseClient } from '@supabase/supabase-js'
 import { createContext, useContext } from 'react'
+import type { Database } from '@/types/supabase'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
-export const createClient = () => {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+export function createClient() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL environment variable')
+  }
+
+  if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable')
+  }
+
+  return createBrowserClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   )
 }
 
 type SupabaseContext = {
-  supabase: SupabaseClient
+  supabase: SupabaseClient<Database>
 }
 
 export const Context = createContext<SupabaseContext | undefined>(undefined)
