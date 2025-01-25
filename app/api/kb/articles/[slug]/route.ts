@@ -13,7 +13,7 @@ export async function GET(
 ) {
   try {
     // Get request headers
-    const headersList = headers()
+    const headersList = await headers()
     const acceptHeader = headersList.get('accept') || 'application/json'
 
     // Check if client accepts JSON

@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getCategory } from '@/lib/services/knowledge-base'
 import { Card } from '@/components/ui/card'
 import Link from 'next/link'
-import { Clock } from 'lucide-react'
+import { Clock, ChevronRight } from 'lucide-react'
 
 export default function CategoryPage() {
   const params = useParams()
@@ -81,25 +81,31 @@ export default function CategoryPage() {
             {category.articles.length > 0 ? (
               <div className="space-y-4">
                 {category.articles.map((article) => (
-                  <Card key={article.id} className="p-4">
-                    <Link 
-                      href={`/kb/articles/${article.id}`}
-                      className="block hover:opacity-70"
-                    >
-                      <h2 className="text-xl font-semibold mb-2">
-                        {article.title}
-                      </h2>
-                      {article.excerpt && (
-                        <p className="text-muted-foreground mb-2">
-                          {article.excerpt}
-                        </p>
-                      )}
-                      <div className="flex items-center text-sm text-muted-foreground">
-                        <Clock className="h-4 w-4 mr-1" aria-hidden="true" />
-                        <span>{article.read_time_minutes} min read</span>
+                  <Link 
+                    key={article.id} 
+                    href={`/kb/articles/${article.id}`}
+                    className="block"
+                  >
+                    <Card className="p-4 hover:bg-muted/50 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <h2 className="text-xl font-semibold mb-2">
+                            {article.title}
+                          </h2>
+                          {article.excerpt && (
+                            <p className="text-muted-foreground mb-2">
+                              {article.excerpt}
+                            </p>
+                          )}
+                          <div className="flex items-center text-sm text-muted-foreground">
+                            <Clock className="h-4 w-4 mr-1" aria-hidden="true" />
+                            <span>{article.read_time_minutes} min read</span>
+                          </div>
+                        </div>
+                        <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" aria-hidden="true" />
                       </div>
-                    </Link>
-                  </Card>
+                    </Card>
+                  </Link>
                 ))}
               </div>
             ) : (

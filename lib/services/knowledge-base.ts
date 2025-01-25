@@ -28,7 +28,11 @@ export interface KBArticle {
  * Get all knowledge base categories
  */
 export async function getCategories(): Promise<KBCategory[]> {
-  const response = await fetch('/api/kb/categories')
+  const response = await fetch('/api/kb/categories', {
+    headers: {
+      'Accept': 'application/json'
+    }
+  })
   if (!response.ok) {
     throw new Error('Failed to fetch categories')
   }
@@ -41,7 +45,11 @@ export async function getCategories(): Promise<KBCategory[]> {
 export async function searchArticles(query: string): Promise<KBArticle[]> {
   if (!query) return []
   
-  const response = await fetch(`/api/kb/search?q=${encodeURIComponent(query)}`)
+  const response = await fetch(`/api/kb/search?q=${encodeURIComponent(query)}`, {
+    headers: {
+      'Accept': 'application/json'
+    }
+  })
   if (!response.ok) {
     throw new Error('Failed to search articles')
   }
@@ -49,7 +57,11 @@ export async function searchArticles(query: string): Promise<KBArticle[]> {
 }
 
 export async function getArticle(slug: string): Promise<KBArticle | null> {
-  const response = await fetch(`/api/kb/articles/${encodeURIComponent(slug)}`)
+  const response = await fetch(`/api/kb/articles/${encodeURIComponent(slug)}`, {
+    headers: {
+      'Accept': 'application/json'
+    }
+  })
   if (response.status === 404) {
     return null
   }
@@ -63,6 +75,7 @@ export async function submitArticleFeedback(articleId: string, isHelpful: boolea
   const response = await fetch(`/api/kb/articles/${encodeURIComponent(articleId)}/feedback`, {
     method: 'POST',
     headers: {
+      'Accept': 'application/json',
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ isHelpful })
@@ -77,7 +90,11 @@ export async function submitArticleFeedback(articleId: string, isHelpful: boolea
 }
 
 export async function getCategory(id: string): Promise<(KBCategory & { articles: KBArticle[] }) | null> {
-  const response = await fetch(`/api/kb/categories/${encodeURIComponent(id)}`)
+  const response = await fetch(`/api/kb/categories/${encodeURIComponent(id)}`, {
+    headers: {
+      'Accept': 'application/json'
+    }
+  })
   if (response.status === 404) {
     return null
   }

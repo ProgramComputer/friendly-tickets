@@ -18,7 +18,6 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { authService } from "@/lib/auth/auth-service"
 import { ROUTES } from "@/lib/constants/routes"
 import { createBrowserClient } from '@supabase/ssr'
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -59,6 +58,13 @@ export default function SignUpPage() {
     try {
       setIsLoading(true)
       
+      // Determine role based on email domain
+      const role = values.email.endsWith('@admin.autocrm.com')
+        ? 'admin'
+        : values.email.endsWith('@agent.autocrm.com')
+          ? 'agent'
+          : 'customer'
+      
       // Sign up the user
       const { data, error } = await supabase.auth.signUp({
         email: values.email,
@@ -72,21 +78,66 @@ export default function SignUpPage() {
       }
 
       if (data?.user) {
+        // Create the appropriate record based on role
+        if (role === 'customer') {
+          const { error: customerError } = await supabase
+            .from('customers')
+            .insert({
+              user_id: data.user.id,
+              email: values.email,
+              name: values.email.split('@')[0], // Use email prefix as initial name
+            })
+
+          if (customerError) {
+            console.error('Customer creation error:', customerError)
+            // If customer creation fails, clean up the auth user
+            await supabase.auth.admin.deleteUser(data.user.id)
+            toast.error("Failed to create customer profile")
+            return
+          }
+        } else {
+          // Create team member record for admin/agent
+          const { error: teamMemberError } = await supabase
+            .from('team_members')
+            .insert({
+              user_id: data.user.id,
+              email: values.email,
+              name: values.email.split('@')[0], // Use email prefix as initial name
+              role: role,
+            })
+
+          if (teamMemberError) {
+            console.error('Team member creation error:', teamMemberError)
+            // If team member creation fails, clean up the auth user
+            await supabase.auth.admin.deleteUser(data.user.id)
+            toast.error("Failed to create team member profile")
+            return
+          }
+        }
+
         // Sign in immediately after signup
-        const { success, error: signInError, redirectTo } = await authService.signIn({
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
           email: values.email,
           password: values.password,
         })
 
-        if (!success || signInError) {
+        if (signInError) {
           toast.error('Account created but automatic login failed. Please log in manually.')
           router.push(ROUTES.auth.login)
           return
         }
 
         toast.success("Account created successfully!")
-        if (redirectTo) {
-          router.push(redirectTo)
+        // Redirect based on role
+        switch (role) {
+          case 'admin':
+            router.push(ROUTES.admin.overview)
+            break
+          case 'agent':
+            router.push(ROUTES.agent.workspace)
+            break
+          default:
+            router.push(ROUTES.dashboard.home)
         }
       } else {
         toast.error("Something went wrong. Please try again.")
