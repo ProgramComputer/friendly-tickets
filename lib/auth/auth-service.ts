@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from "@/lib/supabase/server"
+import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { UserRole } from "@/types/auth"
 import { ROUTES } from "@/lib/constants/routes"
 import { cookies } from 'next/headers'
@@ -16,7 +16,7 @@ async function signIn({ email, password }: {
   password: string
 }): Promise<AuthResult> {
   try {
-    const supabase = await createClient()
+    const supabase = await createServerSupabaseClient()
 
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
@@ -79,7 +79,7 @@ async function signIn({ email, password }: {
 
 async function signOut(): Promise<AuthResult> {
   try {
-    const supabase = await createClient()
+    const supabase = await createServerSupabaseClient()
     const { error } = await supabase.auth.signOut()
     if (error) throw error
     return { success: true, redirectTo: ROUTES.auth.login }
@@ -93,7 +93,7 @@ async function signOut(): Promise<AuthResult> {
 
 async function getCurrentUser() {
   try {
-    const supabase = await createClient()
+    const supabase = await createServerSupabaseClient()
     const { data: { user }, error } = await supabase.auth.getUser()
     if (error || !user) return null
 

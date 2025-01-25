@@ -33,6 +33,11 @@ export const ROUTES = {
   public: {
     home: '/'
   },
+  role: {
+    admin: '/overview',
+    agent: '/workspace',
+    customer: '/dashboard'
+  }
 } as const
 
 export type AppRoutes = typeof ROUTES 

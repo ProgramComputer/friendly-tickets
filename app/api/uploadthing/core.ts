@@ -24,6 +24,7 @@ export const ourFileRouter = {
         fileName: file.name,
         fileUrl: file.url,
       })
+      return { url: file.url }
     }),
 } satisfies FileRouter
 

@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { ROUTES } from "@/lib/constants/routes"
 import Link from "next/link"
 import type { Metadata } from 'next'
 
@@ -21,18 +20,18 @@ export default function PublicLayout({
     <>
       <header className="border-b">
         <div className="container mx-auto flex h-16 items-center px-4">
-          <Link href={ROUTES.public.home} className="text-xl font-bold">
+          <Link href="/" className="text-xl font-bold">
             AutoCRM
           </Link>
           <nav className="ml-6 flex items-center space-x-4">
             <Link
-              href={ROUTES.public.about}
+              href="/about"
               className="text-muted-foreground hover:text-foreground"
             >
               About
             </Link>
             <Link
-              href={ROUTES.public.contact}
+              href="/contact"
               className="text-muted-foreground hover:text-foreground"
             >
               Contact
@@ -40,10 +39,10 @@ export default function PublicLayout({
           </nav>
           <div className="ml-auto flex items-center space-x-4">
             <Button variant="outline" asChild>
-              <Link href={ROUTES.auth.login}>Log in</Link>
+              <Link href="/login">Log in</Link>
             </Button>
             <Button asChild>
-              <Link href={ROUTES.auth.signup}>Sign up</Link>
+              <Link href="/signup">Sign up</Link>
             </Button>
             <ThemeToggle />
           </div>

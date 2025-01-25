@@ -1,10 +1,13 @@
+'use client'
+
+import dynamic from 'next/dynamic'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 
-export default function ContactPage() {
+const ContactPageContent = () => {
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="mb-6 text-4xl font-bold">Contact Us</h1>
@@ -73,4 +76,9 @@ export default function ContactPage() {
       </div>
     </div>
   )
-} 
+}
+
+// Export with SSR disabled to prevent prerendering
+export default dynamic(() => Promise.resolve(ContactPageContent), {
+  ssr: false
+}) 

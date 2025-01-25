@@ -3,10 +3,9 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import type { NextApiRequest } from 'next'
-import { Redis } from '@upstash/redis'
 
-// Initialize Redis for presence and queue management
-const redis = Redis.fromEnv()
+// In-memory store for presence
+const presenceStore = new Map<string, { status: 'online' | 'offline', lastSeen: number }>()
 
 // Socket.io event types
 interface ServerToClientEvents {
@@ -29,11 +28,21 @@ const PRESENCE_TTL = 60 // seconds
 
 async function updatePresence(userId: string, status: 'online' | 'offline') {
   if (status === 'online') {
-    await redis.setex(`presence:${userId}`, PRESENCE_TTL, 'online')
+    presenceStore.set(userId, { status, lastSeen: Date.now() })
   } else {
-    await redis.del(`presence:${userId}`)
+    presenceStore.delete(userId)
   }
 }
+
+// Clean up stale presence entries periodically
+setInterval(() => {
+  const now = Date.now()
+  for (const [userId, data] of presenceStore) {
+    if (now - data.lastSeen > PRESENCE_TTL * 1000) {
+      presenceStore.delete(userId)
+    }
+  }
+}, PRESENCE_TTL * 1000)
 
 // Authentication middleware
 async function authenticate(req: NextApiRequest) {
