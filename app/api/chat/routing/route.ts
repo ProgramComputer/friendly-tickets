@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
 // In-memory store (Note: This will reset on server restart)
@@ -14,18 +14,6 @@ const CHAT_QUEUE = 'chat:queue'
 const AGENT_LOAD = 'agent:load:'
 const AGENT_MAX_CHATS = 'agent:max_chats:'
 const AGENT_STATUS = 'agent:status:'
-
-// Initialize Supabase admin client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  }
-)
 
 // Types
 interface ChatRequest {
@@ -43,5 +31,12 @@ interface AgentStatus {
 
 // Temporarily disabled for build
 export async function POST() {
-  return NextResponse.json({ message: 'Chat routing temporarily disabled' }, { status: 503 })
+  try {
+    // Use service role for admin operations
+    const supabase = await createServerSupabaseClient(undefined, true)
+    return NextResponse.json({ message: 'Chat routing temporarily disabled' }, { status: 503 })
+  } catch (error) {
+    console.error('Supabase client initialization error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 } 
