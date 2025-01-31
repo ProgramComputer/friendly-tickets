@@ -42,25 +42,58 @@ const ADDITIONAL_TEST_USERS = {
     password: 'fakeaccount',
     name: 'Alex VIP'
   },
-  seniorAgent: {
-    email: 'emma@agent.autocrm.com',
+  // Technical Support Team
+  seniorTechAgent: {
+    email: 'emma.tech@agent.autocrm.com',
     password: 'fakeaccount',
-    name: 'Emma Senior Agent'
+    name: 'Emma Senior Tech'
   },
-  teamLead: {
-    email: 'mike@agent.autocrm.com',
+  techAgent1: {
+    email: 'dave.tech@agent.autocrm.com',
     password: 'fakeaccount',
-    name: 'Mike Team Lead'
+    name: 'Dave Tech Support'
   },
-  techAgent: {
-    email: 'dave@agent.autocrm.com',
+  techAgent2: {
+    email: 'alice.tech@agent.autocrm.com',
     password: 'fakeaccount',
-    name: 'Dave Tech Agent'
+    name: 'Alice Tech Support'
   },
-  billingAgent: {
-    email: 'lisa@agent.autocrm.com',
+  // Billing Team
+  seniorBillingAgent: {
+    email: 'lisa.billing@agent.autocrm.com',
     password: 'fakeaccount',
-    name: 'Lisa Billing Agent'
+    name: 'Lisa Senior Billing'
+  },
+  billingAgent1: {
+    email: 'mark.billing@agent.autocrm.com',
+    password: 'fakeaccount',
+    name: 'Mark Billing Support'
+  },
+  billingAgent2: {
+    email: 'sarah.billing@agent.autocrm.com',
+    password: 'fakeaccount',
+    name: 'Sarah Billing Support'
+  },
+  // Customer Success Team
+  customerSuccessLead: {
+    email: 'mike.success@agent.autocrm.com',
+    password: 'fakeaccount',
+    name: 'Mike Success Lead'
+  },
+  seniorSuccessAgent: {
+    email: 'jane.success@agent.autocrm.com',
+    password: 'fakeaccount',
+    name: 'Jane Senior Success'
+  },
+  successAgent1: {
+    email: 'tom.success@agent.autocrm.com',
+    password: 'fakeaccount',
+    name: 'Tom Success Agent'
+  },
+  successAgent2: {
+    email: 'amy.success@agent.autocrm.com',
+    password: 'fakeaccount',
+    name: 'Amy Success Agent'
   }
 } as const
 
@@ -85,7 +118,7 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
 // Define ticket categories and tags
 const TICKET_CATEGORIES = ['technical', 'billing', 'feature_request', 'bug', 'account', 'security'] as const
 const TICKET_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const
-const TICKET_STATUSES = ['open', 'in_progress', 'pending', 'resolved', 'closed'] as const
+const TICKET_STATUSES = ['open', 'pending', 'resolved', 'closed'] as const
 
 const TICKET_TAGS = [
   { name: 'bug', color: '#EF4444' },
@@ -183,6 +216,40 @@ const KB_ARTICLES = [
     read_time_minutes: 3
   },
   {
+    id: 'chat-features',
+    title: 'Using the Chat Features',
+    content: `
+      <h2>Real-time Chat Support</h2>
+      <p>Learn how to use AutoCRM's real-time chat features to get instant support from our team.</p>
+      
+      <h3>Starting a Chat</h3>
+      <ol>
+        <li>Click the chat icon in the bottom right corner</li>
+        <li>Type your message in the chat box</li>
+        <li>Press Enter or click Send to start the conversation</li>
+      </ol>
+      
+      <h3>Chat Features</h3>
+      <ul>
+        <li>Real-time messaging with support agents</li>
+        <li>File and image sharing</li>
+        <li>Chat history preservation</li>
+        <li>Automatic routing to the right department</li>
+      </ul>
+      
+      <h3>Best Practices</h3>
+      <ul>
+        <li>Be clear and concise in your messages</li>
+        <li>Share relevant screenshots when needed</li>
+        <li>Stay in the chat until your issue is resolved</li>
+        <li>Rate the chat session to help us improve</li>
+      </ul>
+    `,
+    excerpt: 'Get instant support using our real-time chat features.',
+    category_id: 'features',
+    read_time_minutes: 4
+  },
+  {
     id: 'billing-faq',
     title: 'Billing Frequently Asked Questions',
     content: `
@@ -228,24 +295,31 @@ const KB_ARTICLES = [
   }
 ] as const
 
+// Define department type
+type Department = {
+  id: string
+  name: string
+  description: string
+}
+
 // Define departments
-const DEPARTMENTS = [
+const DEPARTMENTS: Department[] = [
   {
-    id: 'tech-support',
+    id: '8b9c3f5d-5d6e-4a1c-9c7b-8c4f7d9c4b3a', // Tech Support UUID
     name: 'Technical Support',
     description: 'Handle technical issues and product support'
   },
   {
-    id: 'billing',
+    id: '7a8b9c0d-1e2f-4a1c-9c7b-8c4f7d9c4b3b', // Billing UUID
     name: 'Billing Support',
-    description: 'Handle billing and subscription inquiries'
+    description: 'Handle billing inquiries and payment issues'
   },
   {
-    id: 'customer-success',
+    id: '2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f', // Customer Success UUID
     name: 'Customer Success',
     description: 'Handle account management and customer satisfaction'
   }
-] as const
+]
 
 // Define SLA policies
 const SLA_POLICIES = [
@@ -278,19 +352,109 @@ const TICKET_TEMPLATES = [
     name: 'Login Issue',
     subject: 'Unable to login',
     content: 'User is experiencing login issues. Please verify:\n- Account status\n- Recent password changes\n- 2FA status',
-    department_id: 'tech-support'
+    department_id: DEPARTMENTS[0].id // Technical Support
+  },
+  {
+    name: 'Performance Problem',
+    subject: 'System Performance Issues',
+    content: 'User reports performance problems. Investigate:\n- Specific features affected\n- Browser/device details\n- Network conditions\n- Recent changes or updates',
+    department_id: DEPARTMENTS[0].id // Technical Support
+  },
+  {
+    name: 'Integration Setup',
+    subject: 'API Integration Assistance',
+    content: 'Customer needs help with API integration:\n- Integration type\n- Current setup status\n- Error messages\n- API version being used',
+    department_id: DEPARTMENTS[0].id // Technical Support
   },
   {
     name: 'Billing Inquiry',
     subject: 'Billing Question',
     content: 'Customer has billing inquiry. Check:\n- Current plan\n- Recent charges\n- Payment method status',
-    department_id: 'billing'
+    department_id: DEPARTMENTS[1].id // Billing Support
+  },
+  {
+    name: 'Refund Request',
+    subject: 'Process Refund Request',
+    content: 'Customer requesting refund. Verify:\n- Purchase date\n- Reason for refund\n- Usage history\n- Refund policy eligibility',
+    department_id: DEPARTMENTS[1].id // Billing Support
+  },
+  {
+    name: 'Plan Upgrade',
+    subject: 'Plan Upgrade Assistance',
+    content: 'Customer interested in plan upgrade:\n- Current plan details\n- Desired features\n- Usage requirements\n- Budget constraints',
+    department_id: DEPARTMENTS[1].id // Billing Support
   },
   {
     name: 'Feature Request',
     subject: 'New Feature Suggestion',
     content: 'Customer feature request. Document:\n- Requested functionality\n- Use case\n- Business impact',
-    department_id: 'customer-success'
+    department_id: DEPARTMENTS[2].id // Customer Success
+  },
+  {
+    name: 'Account Review',
+    subject: 'Quarterly Account Review',
+    content: 'Schedule quarterly account review:\n- Current usage patterns\n- Pain points\n- Growth opportunities\n- Success metrics',
+    department_id: DEPARTMENTS[2].id // Customer Success
+  },
+  {
+    name: 'Onboarding Support',
+    subject: 'New Customer Onboarding',
+    content: 'New customer onboarding checklist:\n- Account setup status\n- Training requirements\n- Integration needs\n- Success criteria\n- Timeline expectations',
+    department_id: DEPARTMENTS[2].id // Customer Success
+  },
+  {
+    name: 'Password Reset',
+    subject: 'Password Reset Assistance',
+    content: 'Customer needs password reset help:\n- Verify identity\n- Check account security status\n- Guide through reset process\n- Confirm access after reset',
+    department_id: DEPARTMENTS[0].id // Technical Support
+  },
+  {
+    name: 'Data Export Request',
+    subject: 'Data Export Assistance',
+    content: 'Customer requesting data export:\n- Export format requirements\n- Data range needed\n- Specific data types\n- Compliance requirements\n- Delivery method',
+    department_id: DEPARTMENTS[0].id // Technical Support
+  },
+  {
+    name: 'Security Audit',
+    subject: 'Security Audit Request',
+    content: 'Security audit request checklist:\n- Scope of audit\n- Compliance requirements\n- Access logs review\n- Security settings check\n- Recent activity analysis',
+    department_id: DEPARTMENTS[0].id // Technical Support
+  },
+  {
+    name: 'Invoice Dispute',
+    subject: 'Invoice Dispute Resolution',
+    content: 'Customer disputing invoice charges:\n- Invoice number\n- Disputed items\n- Reason for dispute\n- Supporting documentation\n- Resolution options',
+    department_id: DEPARTMENTS[1].id // Billing Support
+  },
+  {
+    name: 'Payment Method Update',
+    subject: 'Update Payment Information',
+    content: 'Update payment method request:\n- Current payment method\n- New payment details\n- Billing cycle timing\n- Auto-renewal status\n- Payment verification',
+    department_id: DEPARTMENTS[1].id // Billing Support
+  },
+  {
+    name: 'Custom Billing Setup',
+    subject: 'Custom Billing Arrangement',
+    content: 'Custom billing setup request:\n- Business requirements\n- Payment schedule\n- Invoice format\n- Currency preferences\n- Special instructions',
+    department_id: DEPARTMENTS[1].id // Billing Support
+  },
+  {
+    name: 'Training Request',
+    subject: 'Product Training Session',
+    content: 'Training session request:\n- Training topics\n- Team size and roles\n- Preferred schedule\n- Current knowledge level\n- Specific feature focus',
+    department_id: DEPARTMENTS[2].id // Customer Success
+  },
+  {
+    name: 'Integration Review',
+    subject: 'Integration Health Check',
+    content: 'Integration review checklist:\n- Current integrations\n- Performance metrics\n- Pain points\n- Optimization opportunities\n- New requirements',
+    department_id: DEPARTMENTS[2].id // Customer Success
+  },
+  {
+    name: 'Success Planning',
+    subject: 'Success Planning Session',
+    content: 'Success planning meeting:\n- Business objectives\n- Current challenges\n- Growth targets\n- Resource needs\n- Timeline planning',
+    department_id: DEPARTMENTS[2].id // Customer Success
   }
 ] as const
 
@@ -321,7 +485,7 @@ const SAMPLE_TICKETS = [
     title: 'Billing cycle question',
     description: 'Need clarification on billing cycle and upcoming charges',
     priority: 'medium',
-    status: 'in_progress',
+    status: 'pending',
     department: 'billing',
     messages: [
       {
@@ -361,7 +525,51 @@ const SAMPLE_TICKETS = [
   }
 ] as const
 
-async function getOrCreateUser(email: string, password: string) {
+// Define chat quick response templates
+const CHAT_QUICK_RESPONSES = [
+  {
+    title: 'Greeting',
+    content: 'Hello! Thank you for reaching out to our support team. How can I assist you today?',
+    category: 'general'
+  },
+  {
+    title: 'Technical Issue',
+    content: 'I understand you\'re experiencing a technical issue. Could you please provide more details about what\'s happening? This will help me assist you better.',
+    category: 'technical'
+  },
+  {
+    title: 'Billing Question',
+    content: 'For billing related questions, I\'ll need to verify some account details. Could you please confirm your account email address?',
+    category: 'billing'
+  },
+  {
+    title: 'Feature Request',
+    content: 'Thank you for your feature suggestion! I\'ll document this request and forward it to our product team for review.',
+    category: 'product'
+  },
+  {
+    title: 'Closing',
+    content: 'Is there anything else I can help you with today?',
+    category: 'general'
+  },
+  {
+    title: 'Escalation',
+    content: 'I\'ll need to escalate this to our specialized team for further assistance. They will contact you shortly.',
+    category: 'general'
+  },
+  {
+    title: 'Documentation Link',
+    content: 'You can find detailed information about this in our documentation here: [Insert relevant link]',
+    category: 'technical'
+  },
+  {
+    title: 'Follow-up',
+    content: 'I\'m following up on your previous request. Have you had a chance to try the solution we discussed?',
+    category: 'general'
+  }
+] as const
+
+async function getOrCreateUser(email: string, password: string, name: string) {
   try {
     // First try to sign in
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
@@ -381,6 +589,9 @@ async function getOrCreateUser(email: string, password: string) {
       email,
       password,
       options: {
+        data: {
+          name: name
+        },
         emailRedirectTo: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/auth/callback`
       }
     })
@@ -402,234 +613,6 @@ async function getOrCreateUser(email: string, password: string) {
   }
 }
 
-async function upsertCustomer(userId: string, email: string, name: string) {
-  console.log('Attempting to upsert customer with user_id:', userId)
-  const { data, error } = await supabase
-    .from('customers')
-    .upsert(
-      {
-        user_id: userId,
-        email,
-        name
-      },
-      {
-        onConflict: 'user_id',
-        ignoreDuplicates: false
-      }
-    )
-    .select('*')
-    .single()
-  
-  if (error) {
-    console.error('Error upserting customer:', error)
-    throw error
-  }
-  
-  if (!data) {
-    throw new Error(`No customer data returned for email: ${email}`)
-  }
-  
-  console.log('Successfully upserted customer:', { id: data.id, email: data.email })
-  return data
-}
-
-async function upsertTeamMember(userId: string, email: string, name: string, role: 'admin' | 'agent') {
-  const { data, error } = await supabase
-    .from('team_members')
-    .upsert(
-      {
-        user_id: userId,
-        email,
-        name,
-        role
-      },
-      {
-        onConflict: 'user_id',
-        ignoreDuplicates: false
-      }
-    )
-    .select('id')
-    .single()
-  
-  if (error) {
-    console.error('Error upserting team member:', error)
-    throw error
-  }
-  console.log('Upserted team member:', email)
-  return data
-}
-
-async function upsertTickets(customerId: string, agentId: string) {
-  console.log('Starting ticket creation with:', { customerId, agentId })
-  
-  try {
-    const { data: tickets, error } = await supabase
-      .from('tickets')
-      .upsert(
-        [
-          {
-            title: 'Cannot access dashboard',
-            description: 'I am unable to access my dashboard since this morning. Getting a 404 error.',
-            status: 'open',
-            priority: 'high',
-            customer_id: customerId,
-            assignee_id: agentId,
-            category: 'technical'
-          },
-          {
-            title: 'Need help with billing',
-            description: 'My last invoice seems incorrect. Can someone review it?',
-            status: 'pending',
-            priority: 'medium',
-            customer_id: customerId,
-            assignee_id: agentId,
-            category: 'billing'
-          },
-          {
-            title: 'Feature request: Dark mode',
-            description: 'Would love to have a dark mode option for the dashboard.',
-            status: 'open',
-            priority: 'low',
-            customer_id: customerId,
-            assignee_id: null,
-            category: 'feature_request'
-          }
-        ],
-        {
-          onConflict: 'title,customer_id',
-          ignoreDuplicates: false
-        }
-      )
-      .select()
-    
-    if (error) {
-      console.error('Error upserting tickets:', error)
-      throw error
-    }
-
-    if (!tickets || tickets.length === 0) {
-      throw new Error('No tickets returned after upsert')
-    }
-
-    console.log('Successfully created tickets:', tickets.length)
-    return tickets
-  } catch (error) {
-    console.error('Error in upsertTickets:', error)
-    throw error
-  }
-}
-
-async function upsertMessages(
-  tickets: any[],
-  customerUserId: string,
-  agentUserId: string
-) {
-  const dashboardTicket = tickets.find(t => t.title === 'Cannot access dashboard')
-  const billingTicket = tickets.find(t => t.title === 'Need help with billing')
-  const featureTicket = tickets.find(t => t.title === 'Feature request: Dark mode')
-
-  if (!dashboardTicket || !billingTicket || !featureTicket) {
-    throw new Error('Could not find all required tickets')
-  }
-
-  const { error } = await supabase
-    .from('ticket_messages')
-    .upsert(
-      [
-        {
-          ticket_id: dashboardTicket.id,
-          sender_id: customerUserId,
-          sender_type: 'customer',
-          content: 'I keep getting a 404 error when trying to access my dashboard. Can someone help?',
-          is_internal: false
-        },
-        {
-          ticket_id: dashboardTicket.id,
-          sender_id: agentUserId,
-          sender_type: 'team_member',
-          content: 'Hi Jack, I will look into this right away. Can you please clear your browser cache and try again?',
-          is_internal: false
-        },
-        {
-          ticket_id: dashboardTicket.id,
-          sender_id: agentUserId,
-          sender_type: 'team_member',
-          content: 'Checking server logs for any issues.',
-          is_internal: true
-        },
-        {
-          ticket_id: billingTicket.id,
-          sender_id: customerUserId,
-          sender_type: 'customer',
-          content: 'My invoice for January shows charges I do not recognize.',
-          is_internal: false
-        },
-        {
-          ticket_id: featureTicket.id,
-          sender_id: customerUserId,
-          sender_type: 'customer',
-          content: 'Dark mode would be really helpful for late night work.',
-          is_internal: false
-        }
-      ],
-      {
-        onConflict: 'ticket_id,sender_id,content',
-        ignoreDuplicates: true
-      }
-    )
-
-  if (error) {
-    console.error('Error upserting messages:', error)
-    throw error
-  }
-  console.log('Upserted messages')
-}
-
-async function seedTags() {
-  const { error } = await supabase
-    .from('tags')
-    .upsert(
-      TICKET_TAGS,
-      { onConflict: 'name', ignoreDuplicates: false }
-    )
-  
-  if (error) {
-    console.error('Error seeding tags:', error)
-    throw error
-  }
-  console.log('Seeded tags')
-}
-
-async function seedKnowledgeBase() {
-  console.log('Seeding knowledge base categories...')
-  const { error: categoriesError } = await supabase
-    .from('kb_categories')
-    .upsert(
-      KB_CATEGORIES,
-      { onConflict: 'id', ignoreDuplicates: false }
-    )
-  
-  if (categoriesError) {
-    console.error('Error seeding KB categories:', categoriesError)
-    throw categoriesError
-  }
-  console.log('KB categories seeded successfully')
-
-  console.log('Seeding knowledge base articles...')
-  const { error: articlesError } = await supabase
-    .from('kb_articles')
-    .upsert(
-      KB_ARTICLES,
-      { onConflict: 'id', ignoreDuplicates: false }
-    )
-  
-  if (articlesError) {
-    console.error('Error seeding KB articles:', articlesError)
-    throw articlesError
-  }
-  console.log('KB articles seeded successfully')
-}
-
 async function createTicketWithHistory(
   customerId: string,
   assigneeId: string | null,
@@ -644,16 +627,24 @@ async function createTicketWithHistory(
     tags?: string[]
   }
 ) {
-  // First get the customer's actual ID from their user_id
+  // First check if customer exists and log details
+  const { data: customers, error: customersError } = await supabase
+    .from('customers')
+    .select('*')
+    .eq('auth_user_id', customerId)
+
+  console.log('Checking customer existence:', { customerId, customers, customersError })
+
+  // First get the customer's actual ID from their auth_user_id
   const { data: customer, error: customerError } = await supabase
     .from('customers')
     .select('id')
-    .eq('user_id', customerId)
+    .eq('auth_user_id', customerId)
     .single()
 
   if (customerError || !customer) {
-    console.error('Customer not found for user_id:', customerId)
-    throw new Error(`Customer with user_id ${customerId} not found`)
+    console.error('Customer not found for auth_user_id:', customerId)
+    throw new Error(`Customer with auth_user_id ${customerId} not found`)
   }
 
   // If assigneeId is provided, verify team member exists
@@ -661,12 +652,12 @@ async function createTicketWithHistory(
     const { data: teamMember, error: teamMemberError } = await supabase
       .from('team_members')
       .select('id')
-      .eq('user_id', assigneeId)
-      .single()
+      .eq('auth_user_id', assigneeId)
+      .maybeSingle()
 
     if (teamMemberError || !teamMember) {
-      console.error('Team member not found for user_id:', assigneeId)
-      throw new Error(`Team member with user_id ${assigneeId} not found`)
+      console.error('Team member not found for auth_user_id:', assigneeId)
+      throw new Error(`Team member with auth_user_id ${assigneeId} not found`)
     }
     assigneeId = teamMember.id // Use the actual team member ID
   }
@@ -710,15 +701,26 @@ async function seedEnterpriseScenario(
 ) {
   // Create multiple tickets with various states and histories
   const tickets = await Promise.all([
+    // Technical Support Tickets
     createTicketWithHistory(enterpriseUserId, agentIds.techAgent, {
       title: 'API Integration Issues',
       description: 'Having trouble with the REST API endpoints',
-      status: 'in_progress',
+      status: 'pending',
       priority: 'high',
       category: 'technical',
       tags: ['api', 'bug'],
       created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days ago
     }),
+    createTicketWithHistory(enterpriseUserId, agentIds.seniorTechAgent, {
+      title: 'Security Vulnerability Report',
+      description: 'Identified potential XSS vulnerability in dashboard',
+      status: 'open',
+      priority: 'urgent',
+      category: 'security',
+      tags: ['security', 'bug'],
+      created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() // 2 days ago
+    }),
+    // Billing Support Tickets
     createTicketWithHistory(enterpriseUserId, agentIds.billingAgent, {
       title: 'Bulk License Upgrade',
       description: 'Need to upgrade enterprise license for 500 seats',
@@ -728,14 +730,33 @@ async function seedEnterpriseScenario(
       tags: ['billing'],
       created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() // 2 days ago
     }),
-    createTicketWithHistory(enterpriseUserId, null, {
-      title: 'Custom Dashboard Requirements',
-      description: 'Specifications for custom dashboard features',
+    createTicketWithHistory(enterpriseUserId, agentIds.seniorBillingAgent, {
+      title: 'Custom Billing Integration',
+      description: 'Setting up custom billing integration with SAP',
+      status: 'pending',
+      priority: 'high',
+      category: 'billing',
+      tags: ['billing', 'integration'],
+      created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString() // 5 days ago
+    }),
+    // Customer Success Tickets
+    createTicketWithHistory(enterpriseUserId, agentIds.successLead, {
+      title: 'Quarterly Business Review',
+      description: 'Schedule and prepare for quarterly business review',
       status: 'open',
       priority: 'medium',
-      category: 'feature_request',
-      tags: ['feature', 'enhancement'],
+      category: 'account',
+      tags: ['account', 'review'],
       created_at: new Date().toISOString()
+    }),
+    createTicketWithHistory(enterpriseUserId, agentIds.seniorSuccessAgent, {
+      title: 'Training Session Request',
+      description: 'Need advanced training for new team members',
+      status: 'pending',
+      priority: 'medium',
+      category: 'technical',
+      tags: ['training'],
+      created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() // 3 days ago
     })
   ])
 
@@ -748,16 +769,17 @@ async function seedVIPScenario(
 ) {
   // Create VIP tickets with high priority and quick responses
   const tickets = await Promise.all([
-    createTicketWithHistory(vipUserId, agentIds.seniorAgent, {
+    // Technical Issues
+    createTicketWithHistory(vipUserId, agentIds.seniorTechAgent, {
       title: 'Account Security Audit',
       description: 'Request for detailed security audit report',
-      status: 'in_progress',
+      status: 'pending',
       priority: 'high',
       category: 'security',
       tags: ['security'],
       created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString() // 1 day ago
     }),
-    createTicketWithHistory(vipUserId, agentIds.teamLead, {
+    createTicketWithHistory(vipUserId, agentIds.techAgent, {
       title: 'Performance Optimization',
       description: 'System response times have degraded',
       status: 'open',
@@ -766,24 +788,135 @@ async function seedVIPScenario(
       tags: ['performance', 'urgent'],
       sla_breach: true,
       created_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString() // 4 hours ago
+    }),
+    // Billing Issues
+    createTicketWithHistory(vipUserId, agentIds.seniorBillingAgent, {
+      title: 'Custom Payment Terms',
+      description: 'Discussion of custom payment terms for expansion',
+      status: 'pending',
+      priority: 'high',
+      category: 'billing',
+      tags: ['billing', 'vip'],
+      created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() // 2 days ago
+    }),
+    // Success Planning
+    createTicketWithHistory(vipUserId, agentIds.successLead, {
+      title: 'Strategic Partnership Planning',
+      description: 'Discuss potential strategic partnership opportunities',
+      status: 'open',
+      priority: 'medium',
+      category: 'account',
+      tags: ['partnership', 'planning'],
+      created_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString() // 12 hours ago
     })
   ])
 
   return tickets
 }
 
+async function clearTestUsers() {
+  console.log('Clearing existing test users...')
+  
+  // Get list of test emails
+  const testEmails = new Set<string>([
+    ...Object.values(TEST_USERS).map(u => u.email),
+    ...Object.values(ADDITIONAL_TEST_USERS).map(u => u.email)
+  ])
+  
+  // Get all users and filter by our test emails
+  const { data: { users }, error: listError } = await supabase.auth.admin.listUsers()
+  
+  if (listError) {
+    console.error('Error listing users:', listError)
+    return
+  }
+
+  // Delete matching users
+  for (const user of users || []) {
+    if (user.email && testEmails.has(user.email as string)) {
+      const { error } = await supabase.auth.admin.deleteUser(user.id)
+      if (error) {
+        console.error(`Error deleting user ${user.email}:`, error)
+      } else {
+        console.log(`Deleted user: ${user.email}`)
+      }
+    }
+  }
+  
+  console.log('Cleared test users')
+}
+
+async function clearPublicTables() {
+  console.log('Clearing public tables...')
+  
+  // List of tables to clear in order (considering foreign key constraints)
+  const tables = [
+    'ticket_messages',
+    'tickets',
+    'team_members',
+    'customers',
+    'ticket_templates',
+    'sla_policies',
+    'departments',
+    'tags',
+    'kb_articles',
+    'kb_categories',
+    'chat_quick_responses'
+  ]
+
+  // Delete from each table in order
+  for (const table of tables) {
+    const { error } = await supabase
+      .from(table)
+      .delete()
+      .gte('created_at', '2000-01-01') // Safe WHERE clause that matches all records
+    
+    if (error) {
+      console.error(`Error clearing table ${table}:`, error)
+    } else {
+      console.log(`Cleared table: ${table}`)
+    }
+  }
+}
+
 async function seedTestData(options: { role?: UserRole } = {}) {
   try {
     console.log('Starting to seed test data...')
 
+    // Clear existing test users first
+    await clearTestUsers()
+
+    // Clear existing data from public tables
+    await clearPublicTables()
+
+    // Manually clear team_members and customers since truncate might fail
+    console.log('Ensuring team_members and customers are cleared...')
+    await supabase.from('team_members').delete()
+    await supabase.from('customers').delete()
+
     // Seed departments
     console.log('Seeding departments...')
-    await supabase.from('departments').upsert(
-      DEPARTMENTS.map(dept => ({
-        id: dept.id,
-        name: dept.name,
-        description: dept.description
-      }))
+    const { data: createdDepartments, error: deptError } = await supabase
+      .from('departments')
+      .upsert(
+        DEPARTMENTS.map(dept => ({
+          id: dept.id,
+          name: dept.name,
+          description: dept.description
+        }))
+      )
+      .select()
+
+    if (deptError) {
+      console.error('Error seeding departments:', deptError)
+      throw deptError
+    }
+
+    console.log('Created departments:', createdDepartments)
+
+    // Create a map of department names to their IDs
+    const departmentMap = new Map(
+      createdDepartments?.map(dept => [dept.name, dept.id]) || []
     )
 
     // Seed SLA policies
@@ -809,32 +942,124 @@ async function seedTestData(options: { role?: UserRole } = {}) {
       }))
     )
 
-    // Create test users
+    // Create all test users
     console.log('Creating test users...')
     const users = await Promise.all(
       Object.entries({ ...TEST_USERS, ...ADDITIONAL_TEST_USERS }).map(
         async ([role, user]) => {
-          const dbUser = await getOrCreateUser(user.email, user.password)
+          const dbUser = await getOrCreateUser(user.email, user.password, user.name)
+          
+          // Create customer or team member record based on email domain
+          if (user.email.includes('@agent.autocrm.com') || user.email.includes('@admin.autocrm.com')) {
+            // First delete any existing team member with this email
+            await supabase
+              .from('team_members')
+              .delete()
+              .eq('email', user.email)
+              .or('auth_user_id.is.null,auth_user_id.eq.' + dbUser.id)
+
+            // Create team member
+            const { error: teamMemberError } = await supabase
+              .from('team_members')
+              .insert({
+                auth_user_id: dbUser.id,
+                email: user.email,
+                name: user.name,
+                role: user.email.includes('@admin.autocrm.com') ? 'admin' : 'agent'
+              })
+            if (teamMemberError) {
+              console.error(`Error creating team member for ${user.email}:`, teamMemberError)
+            }
+          } else {
+            // First delete any existing customer with this email
+            await supabase
+              .from('customers')
+              .delete()
+              .eq('email', user.email)
+              .or('auth_user_id.is.null,auth_user_id.eq.' + dbUser.id)
+
+            // Create customer
+            const { error: customerError } = await supabase
+              .from('customers')
+              .insert({
+                auth_user_id: dbUser.id,
+                email: user.email,
+                name: user.name
+              })
+            if (customerError) {
+              console.error(`Error creating customer for ${user.email}:`, customerError)
+            }
+          }
+          
           return { role, ...user, id: dbUser.id }
         }
       )
     )
 
-    // Create team members for agents and admin
-    console.log('Creating team members...')
+    // Check if records were created
+    console.log('Checking created records...')
+    const { data: allCustomers } = await supabase.from('customers').select('*')
+    const { data: allTeamMembers } = await supabase.from('team_members').select('*')
+    console.log('Current customers:', allCustomers)
+    console.log('Current team members:', allTeamMembers)
+
+    // Update team members with departments
+    console.log('Updating team members with departments...')
     const teamMembers = users
-      .filter(user => user.role !== 'customer')
-      .map(user => ({
-        user_id: user.id,
-        name: user.name,
-        role: user.role,
-        department_id: DEPARTMENTS[0].id // Assign to first department by default
-      }))
+      .filter(user => user.email.includes('@agent.autocrm.com') || user.email.includes('@admin.autocrm.com'))
+      .map(user => {
+        // Get department based on email
+        let departmentId = departmentMap.get('Technical Support') // Default to tech support
 
-    await supabase.from('team_members').upsert(teamMembers)
+        if (user.email.includes('tech')) {
+          departmentId = departmentMap.get('Technical Support')
+        } else if (user.email.includes('billing')) {
+          departmentId = departmentMap.get('Billing Support')
+        } else if (user.email.includes('success') || user.email.includes('lead')) {
+          departmentId = departmentMap.get('Customer Success')
+        }
 
-    // Seed tickets with messages
-    console.log('Seeding tickets and messages...')
+        console.log(`Assigning user ${user.email} to department ${departmentId}`)
+
+        return {
+          auth_user_id: user.id,
+          department_id: departmentId
+        }
+      })
+
+    // Update each team member with their department
+    for (const member of teamMembers) {
+      const { error } = await supabase
+        .from('team_members')
+        .update({ department_id: member.department_id })
+        .eq('auth_user_id', member.auth_user_id)
+
+      if (error) {
+        console.error(`Error updating department for user ${member.auth_user_id}:`, error)
+      }
+    }
+
+    // Store agent IDs for reference
+    const agentIds = {
+      basicAgent: users.find(u => u.email === TEST_USERS.agent.email)?.id,
+      techAgent: users.find(u => u.email === ADDITIONAL_TEST_USERS.techAgent1.email)?.id,
+      seniorTechAgent: users.find(u => u.email === ADDITIONAL_TEST_USERS.seniorTechAgent.email)?.id,
+      billingAgent: users.find(u => u.email === ADDITIONAL_TEST_USERS.billingAgent1.email)?.id,
+      seniorBillingAgent: users.find(u => u.email === ADDITIONAL_TEST_USERS.seniorBillingAgent.email)?.id,
+      successLead: users.find(u => u.email === ADDITIONAL_TEST_USERS.customerSuccessLead.email)?.id,
+      seniorSuccessAgent: users.find(u => u.email === ADDITIONAL_TEST_USERS.seniorSuccessAgent.email)?.id
+    }
+
+    // Log agent IDs for debugging
+    console.log('Agent IDs:', {
+      techAgent: {
+        id: agentIds.techAgent,
+        email: ADDITIONAL_TEST_USERS.techAgent1.email
+      }
+    })
+
+    // Seed basic tickets
+    console.log('Seeding basic tickets...')
     for (const ticket of SAMPLE_TICKETS) {
       const customer = users.find(u => u.role === 'customer')!
       const agent = users.find(u => u.role === 'agent')!
@@ -848,7 +1073,8 @@ async function seedTestData(options: { role?: UserRole } = {}) {
           status: ticket.status,
           department: ticket.department,
           customer_id: customer.id,
-          assignee_id: agent.id
+          assignee_id: agent.id,
+          organization_id: null // Basic tickets have no org
         })
         .select()
         .single()
@@ -865,14 +1091,45 @@ async function seedTestData(options: { role?: UserRole } = {}) {
       }
     }
 
+    // Seed enterprise tickets
+    console.log('Seeding enterprise tickets...')
+    const enterpriseUser = users.find(u => u.email === ADDITIONAL_TEST_USERS.enterpriseCustomer.email)!
+    if (enterpriseUser) {
+      await seedEnterpriseScenario(enterpriseUser.id, agentIds)
+    }
+
+    // Seed VIP tickets
+    console.log('Seeding VIP tickets...')
+    const vipUser = users.find(u => u.email === ADDITIONAL_TEST_USERS.vipCustomer.email)!
+    if (vipUser) {
+      await seedVIPScenario(vipUser.id, agentIds)
+    }
+
     // Seed knowledge base
     console.log('Seeding knowledge base...')
     await supabase.from('kb_categories').upsert(KB_CATEGORIES)
     await supabase.from('kb_articles').upsert(KB_ARTICLES)
 
-      // Seed tags
+    // Seed tags
     console.log('Seeding tags...')
     await supabase.from('tags').upsert(TICKET_TAGS)
+
+    // Seed chat quick responses
+    console.log('Seeding chat quick responses...')
+    if (allTeamMembers && allTeamMembers.length > 0) {
+      // Create quick responses for each team member
+      for (const teamMember of allTeamMembers) {
+        await supabase.from('chat_quick_responses').insert(
+          CHAT_QUICK_RESPONSES.map(template => ({
+            team_member_id: teamMember.id,
+            title: template.title,
+            content: template.content,
+            category: template.category
+          }))
+        )
+      }
+      console.log('Created chat quick responses for team members')
+    }
 
     console.log('Seeding completed successfully!')
   } catch (error) {

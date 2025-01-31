@@ -2,11 +2,10 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase/client'
-import type { TeamMember } from '@/types/tickets'
+import type { TeamMember } from '@/types'
 import { createClient } from '@supabase/supabase-js'
-import { Database } from '@/lib/supabase/database.types'
+import { Database } from '@/types'
 
-type TeamMember = Database['public']['Tables']['team_members']['Row']
 
 interface CreateTeamMemberInput {
   name: string
@@ -54,6 +53,7 @@ async function createTeamMember(input: CreateTeamMemberInput): Promise<TeamMembe
         description
       )
     `)
+    .limit(1)
     .single()
 
   if (error) {
@@ -85,6 +85,7 @@ async function updateTeamMember(
         description
       )
     `)
+    .limit(1)
     .single()
 
   if (error) {
@@ -143,47 +144,40 @@ export function useDeleteTeamMember() {
   })
 }
 
-export async function getTeamMemberRole(userId: string): Promise<string | null> {
-  try {
-    // First check if user is a customer (to avoid 406 on team_members query for customers)
-    const { data: customer, error: customerError } = await supabase
-      .from('customers')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .maybeSingle()
+export function useTeamMember(userId: string) {
+  return useQuery({
+    queryKey: ['team-member', userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('team_members')
+        .select('*')
+        .eq('auth_user_id', userId)
+        .single()
 
-    if (customerError) {
-      console.error('Error fetching customer:', customerError)
-      return null
-    }
-
-    if (customer) {
-      return 'customer'
-    }
-
-    // If not a customer, then check team_members
-    const { data: teamMember, error: teamError } = await supabase
-      .from('team_members')
-      .select('role', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .maybeSingle()
-
-    if (teamError) {
-      console.error('Error fetching team member role:', teamError)
-      return null
-    }
-
-    return teamMember?.role ?? null
-  } catch (error) {
-    console.error('Error in getTeamMemberRole:', error)
-    return null
-  }
+      if (error) throw error
+      return data
+    },
+    enabled: !!userId
+  })
 }
 
-export function useTeamMemberRole(userId: string | undefined) {
+export function useTeamMemberRole(userId: string) {
   return useQuery({
     queryKey: ['team-member-role', userId],
-    queryFn: () => getTeamMemberRole(userId!),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('team_members')
+        .select('role')
+        .eq('auth_user_id', userId)
+        .maybeSingle()
+
+      if (error) {
+        console.error('Error fetching role:', error)
+        return null
+      }
+
+      return data?.role || null
+    },
     enabled: !!userId
   })
 } 

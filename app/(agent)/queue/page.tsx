@@ -3,14 +3,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 export default function QueuePage() {
   return (
     <div className="container mx-auto p-6">
-      <h1 className="mb-8 text-3xl font-bold">Support Queue</h1>
+      <h1 className="mb-8 text-3xl font-bold">Ticket Queue</h1>
       
       <div className="grid gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Active Tickets</CardTitle>
+            <CardTitle>Unassigned Tickets</CardTitle>
             <CardDescription>
-              Tickets waiting for agent response
+              Support tickets waiting for agent assignment and response
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -20,9 +20,9 @@ export default function QueuePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Queue Statistics</CardTitle>
+            <CardTitle>Queue Metrics</CardTitle>
             <CardDescription>
-              Real-time queue metrics
+              Response times and SLA compliance metrics
             </CardDescription>
           </CardHeader>
           <CardContent>

@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useQuery } from "@tanstack/react-query"
-import { createClient } from "@supabase/supabase-js"
 import {
   Select,
   SelectContent,
@@ -13,33 +12,19 @@ import {
 } from "@/components/ui/select"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Loader2 } from "lucide-react"
-
-interface TeamMember {
-  user_id: string
-  name: string | null
-  email: string
-  role: string
-  department: string | null
-}
-
-interface TicketAssigneeSelectProps {
-  value?: string
-  onValueChange: (value: string) => void
-}
+import { TeamMember } from "@/types"
+import { TicketAssigneeSelectProps } from '@/types/features/tickets/props'
 
 export function TicketAssigneeSelect({
   value,
   onValueChange,
 }: TicketAssigneeSelectProps) {
-  const [agents, setAgents] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
-
   const { data: teamMembers, isLoading: queryLoading } = useQuery({
     queryKey: ["team-members"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("team_members")
-        .select("user_id, name, email, role, department")
+        .select("auth_user_id, name, email, role, department")
         .in("role", ["admin", "agent"])
         .order("name")
 
@@ -48,7 +33,7 @@ export function TicketAssigneeSelect({
     },
   })
 
-  const selectedMember = teamMembers?.find((m) => m.user_id === value)
+  const selectedMember = teamMembers?.find((m) => m.auth_user_id === value)
 
   if (queryLoading) {
     return (
@@ -89,7 +74,7 @@ export function TicketAssigneeSelect({
       </SelectTrigger>
       <SelectContent>
         {teamMembers?.map((member) => (
-          <SelectItem key={member.user_id} value={member.user_id} className="py-2">
+          <SelectItem key={member.auth_user_id} value={member.auth_user_id} className="py-2">
             <div className="flex items-center gap-2">
               <Avatar className="h-8 w-8">
                 <AvatarFallback>

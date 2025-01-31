@@ -26,7 +26,7 @@ export async function GET(request: Request) {
       const { data: teamMember } = await supabase
         .from('team_members')
         .select('role')
-        .eq('user_id', user.id)
+        .eq('auth_user_id', user.id)
         .single()
 
       if (teamMember) {
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
       const { data: customer } = await supabase
         .from('customers')
         .select()
-        .eq('user_id', user.id)
+        .eq('auth_user_id', user.id)
         .single()
 
       if (customer) {

@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { createBrowserClient } from '@supabase/ssr'
-import { Database } from '@/lib/supabase/database.types'
+import { Database } from '@/types'
 
 export interface Tag {
   id: string

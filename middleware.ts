@@ -75,8 +75,9 @@ export async function middleware(request: NextRequest) {
   const { data: teamMember } = await supabase
     .from('team_members')
     .select('role')
-    .eq('user_id', user.id)
-    .single()
+    .eq('auth_user_id', user.id)
+    
+    .maybeSingle()
 
   const role = teamMember ? teamMember.role : 'customer'
 

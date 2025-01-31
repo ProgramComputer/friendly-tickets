@@ -3,7 +3,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent } from "@/components/ui/card"
 import { formatDistanceToNow } from "date-fns"
-import type { TicketWithRelations } from "@/types/tickets"
+import type { TicketWithRelations } from "@/types/features/tickets"
 
 interface TicketMessagesProps {
   ticket: TicketWithRelations

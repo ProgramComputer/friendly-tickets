@@ -1,11 +1,7 @@
 'use client'
 
+import { OnlineIndicatorProps } from '@/types/features/chat/indicators'
 import { cn } from '@/lib/utils'
-
-interface OnlineIndicatorProps {
-  isOnline: boolean
-  className?: string
-}
 
 export function OnlineIndicator({ isOnline, className }: OnlineIndicatorProps) {
   return (

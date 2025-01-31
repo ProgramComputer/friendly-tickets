@@ -102,4 +102,16 @@ export async function getCategory(id: string): Promise<(KBCategory & { articles:
     throw new Error('Failed to fetch category')
   }
   return response.json()
+}
+
+export async function getRecentArticles(): Promise<KBArticle[]> {
+  const response = await fetch('/api/kb/articles/recent', {
+    headers: {
+      'Accept': 'application/json'
+    }
+  })
+  if (!response.ok) {
+    throw new Error('Failed to fetch recent articles')
+  }
+  return response.json()
 } 

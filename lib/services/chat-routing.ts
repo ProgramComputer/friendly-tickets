@@ -1,16 +1,4 @@
-// Types
-interface ChatRequest {
-  sessionId: string
-  customerId: string
-  priority: number
-  timestamp: number
-}
-
-interface AgentStatus {
-  id: string
-  status: 'online' | 'away' | 'offline'
-  lastSeen: number
-}
+import { ChatRequest, AgentStatus } from '@/types/features/chat/routing'
 
 // Queue Management
 export async function addToQueue(request: ChatRequest) {

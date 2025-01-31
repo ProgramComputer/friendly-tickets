@@ -2,7 +2,7 @@
 
 import { Flag } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { TicketPriority } from '@/types/tickets'
+import { TicketPriority } from '@/types/features/tickets'
 
 interface PriorityIndicatorProps {
   priority: TicketPriority

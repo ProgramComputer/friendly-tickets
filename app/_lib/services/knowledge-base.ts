@@ -103,7 +103,7 @@ export async function submitArticleFeedback(articleId: string, isHelpful: boolea
     .from('kb_article_feedback')
     .insert({
       article_id: articleId,
-      user_id: user.user?.id,
+      auth_user_id: user.user?.id,
       is_helpful: isHelpful
     })
   

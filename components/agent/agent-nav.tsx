@@ -7,7 +7,7 @@ import { ROUTES } from '@/lib/constants/routes'
 
 const navItems = [
   { href: ROUTES.agent.workspace, label: 'Workspace' },
-  { href: ROUTES.agent.queue, label: 'Queue' },
+  { href: ROUTES.agent.queue, label: 'Ticket Queue' },
   { href: ROUTES.agent.templates, label: 'Templates' }
 ]
 

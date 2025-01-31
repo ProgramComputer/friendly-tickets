@@ -1,4 +1,4 @@
-import { UserRole } from '@/types/auth'
+import { UserRole } from '@/types/shared/auth'
 
 export const ROUTES = {
   auth: {

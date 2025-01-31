@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
-import { TicketPriority, TicketStatus } from '@/types/tickets'
+import { TicketPriority, TicketStatus } from '@/types/features/tickets'
 import { getTickets } from '@/lib/supabase/domain/tickets/queries'
 import { Button } from '@/components/ui/button'
 import { TicketFilterPanel } from './ticket-filter-panel'

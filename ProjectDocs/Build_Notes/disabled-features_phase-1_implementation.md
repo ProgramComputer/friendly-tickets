@@ -1,7 +1,7 @@
 # Disabled Features Implementation - Phase 1
 
 ## Task Objective
-Implement the temporarily disabled features in the application, focusing on chat and knowledge base functionality.
+Implement the TODO Temporarily disabled features in the application, focusing on chat and knowledge base functionality.
 
 ## Current State Assessment
 Several API endpoints are currently disabled for the build:

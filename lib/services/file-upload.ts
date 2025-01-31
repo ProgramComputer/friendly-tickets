@@ -1,6 +1,6 @@
 'use server'
 
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 
 const ALLOWED_FILE_TYPES = {
   'image/jpeg': 'jpg',
@@ -25,7 +25,7 @@ export async function uploadFile(file: File, sessionId: string) {
       throw new Error('File size exceeds 5MB limit')
     }
 
-    const supabase = createServerSupabaseClient()
+    const supabase = createClient()
     const fileExt = ALLOWED_FILE_TYPES[file.type as keyof typeof ALLOWED_FILE_TYPES]
     const fileName = `${sessionId}/${Date.now()}.${fileExt}`
 
@@ -57,7 +57,7 @@ export async function uploadFile(file: File, sessionId: string) {
 
 export async function deleteFile(filePath: string) {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = createClient()
     const { error } = await supabase.storage
       .from('chat-attachments')
       .remove([filePath])

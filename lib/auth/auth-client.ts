@@ -1,7 +1,7 @@
 'use client'
 
 import { createBrowserClient } from '@supabase/ssr'
-import { UserRole } from '@/types/auth'
+import { UserRole } from '@/types/shared/auth'
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,7 +20,7 @@ export const authClient = {
       const { data: teamMember } = await supabase
         .from('team_members')
         .select()
-        .eq('user_id', user.id)
+        .eq('auth_user_id', user.id)
         .single()
 
       if (teamMember) {
@@ -35,7 +35,7 @@ export const authClient = {
       const { data: customer } = await supabase
         .from('customers')
         .select()
-        .eq('user_id', user.id)
+        .eq('auth_user_id', user.id)
         .single()
 
       if (customer) {

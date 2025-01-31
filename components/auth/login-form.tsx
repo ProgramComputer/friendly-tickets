@@ -37,7 +37,7 @@ export function LoginForm() {
       const { data: profile, error: profileError } = await supabase
         .from(role === 'customer' ? 'customers' : 'team_members')
         .select('*')
-        .eq('user_id', data.user.id)
+        .eq('auth_user_id', data.user.id)
         .single()
 
       if (profileError || !profile) {

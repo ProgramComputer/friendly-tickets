@@ -1,6 +1,6 @@
 import { createBrowserClient } from '@supabase/ssr'
 import { createContext, useContext } from 'react'
-import type { Database } from '@/types/supabase'
+import type { Database } from '@/types/global/supabase'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 export function createClient() {

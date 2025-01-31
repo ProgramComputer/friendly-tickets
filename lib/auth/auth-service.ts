@@ -1,7 +1,7 @@
 'use server'
 
-import { createServerSupabaseClient } from "@/lib/supabase/server"
-import { UserRole } from "@/types/auth"
+import { createClient } from "@/lib/supabase/server"
+import { UserRole } from "@/types/shared/auth"
 import { ROUTES } from "@/lib/constants/routes"
 import { cookies } from 'next/headers'
 
@@ -16,7 +16,7 @@ async function signIn({ email, password }: {
   password: string
 }): Promise<AuthResult> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createClient()
 
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
@@ -28,8 +28,8 @@ async function signIn({ email, password }: {
     // First check if user is a team member
     const { data: teamMember } = await supabase
       .from('team_members')
-      .select()
-      .eq('user_id', authData.user.id)
+      .select('role')
+      .eq('auth_user_id', authData.user.id)
       .single()
 
     if (teamMember) {
@@ -43,7 +43,7 @@ async function signIn({ email, password }: {
     const { data: customer, error: customerError } = await supabase
       .from('customers')
       .select()
-      .eq('user_id', authData.user.id)
+      .eq('auth_user_id', authData.user.id)
       .single()
 
     if (customerError || !customer) {
@@ -51,7 +51,7 @@ async function signIn({ email, password }: {
       const { error: createError } = await supabase
         .from('customers')
         .insert({
-          user_id: authData.user.id,
+          auth_user_id: authData.user.id,
           email: email,
           name: email.split('@')[0], // Use email prefix as initial name
         })
@@ -79,7 +79,7 @@ async function signIn({ email, password }: {
 
 async function signOut(): Promise<AuthResult> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createClient()
     const { error } = await supabase.auth.signOut()
     if (error) throw error
     return { success: true, redirectTo: ROUTES.auth.login }
@@ -93,15 +93,15 @@ async function signOut(): Promise<AuthResult> {
 
 async function getCurrentUser() {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createClient()
     const { data: { user }, error } = await supabase.auth.getUser()
     if (error || !user) return null
 
     // First check team members
     const { data: teamMember } = await supabase
       .from('team_members')
-      .select()
-      .eq('user_id', user.id)
+      .select('role, name')
+      .eq('auth_user_id', user.id)
       .single()
 
     if (teamMember) {
@@ -115,8 +115,8 @@ async function getCurrentUser() {
     // Then check customers
     const { data: customer } = await supabase
       .from('customers')
-      .select()
-      .eq('user_id', user.id)
+      .select('name')
+      .eq('auth_user_id', user.id)
       .single()
 
     if (customer) {

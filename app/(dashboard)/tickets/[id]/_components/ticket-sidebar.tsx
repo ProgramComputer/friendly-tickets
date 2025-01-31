@@ -9,7 +9,7 @@ import { StatusBadge } from '@/components/shared/status-badge'
 import { PriorityIndicator } from '@/components/shared/priority-indicator'
 import { useUpdateTicket } from '@/lib/hooks/tickets/use-tickets'
 import { useToast } from '@/hooks/use-toast'
-import type { Ticket } from '@/lib/supabase/database.types'
+import type { Ticket } from '@/types'
 
 interface TicketSidebarProps {
   ticket: Ticket

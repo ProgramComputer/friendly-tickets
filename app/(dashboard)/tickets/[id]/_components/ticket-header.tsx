@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { formatDistanceToNow } from "date-fns"
 import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
-import type { TicketWithRelations } from "@/types/tickets"
+import type { TicketWithRelations } from "@/types/features/tickets"
 
 interface TicketHeaderProps {
   ticket: TicketWithRelations

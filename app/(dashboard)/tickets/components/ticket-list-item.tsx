@@ -3,7 +3,7 @@
 import { MessageSquare, MoreVertical } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
-import { Ticket } from '@/types/tickets'
+import { Ticket } from '@/types/features/tickets'
 import { cn } from '@/lib/utils'
 import { useUpdateTicket } from '@/lib/hooks/tickets/use-tickets'
 import { Button } from '@/components/ui/button'

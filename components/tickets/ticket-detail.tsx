@@ -10,6 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { formatDistanceToNow } from "date-fns"
 import { TicketResponse } from "@/lib/supabase/types"
+import { ChatInput } from "@/components/chat/chat-input"
+import { toast } from "sonner"
 
 interface TicketDetail {
   id: string
@@ -38,18 +40,22 @@ interface TicketDetail {
   watchers: { email: string; type: "cc" | "bcc" }[]
   custom_fields: Record<string, any>
   responses: TicketResponse[]
+  metadata: Record<string, any>
 }
 
 export function TicketDetail({ ticketId }: { ticketId: string }) {
   const [ticket, setTicket] = useState<TicketDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const { role, canAccessFeature } = useAuth()
+  const { role, canAccessFeature, user } = useAuth()
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
+    console.log('[TicketDetail] Loading ticket:', { ticketId })
     loadTicket()
   }, [ticketId])
 
   async function loadTicket() {
+    console.log('[TicketDetail] Starting ticket load')
     try {
       const { data, error } = await supabase
         .from("tickets")
@@ -63,38 +69,64 @@ export function TicketDetail({ ticketId }: { ticketId: string }) {
           customer:customer_id(name, email),
           assignee:assignee_id(name, email),
           department:department_id(name),
-          sla_policy:sla_policy_id(name, response_time, resolution_time),
+          sla_policy:sla_policy_id(name, response_time_hours, resolution_time_hours),
           tags:ticket_tags(tag:tag_id(name, color)),
-          watchers:ticket_watchers(email, type),
-          custom_fields,
+          watchers:ticket_watchers(email, watcher_type),
+          metadata,
           responses:ticket_responses(
             id,
             content,
             created_at,
             is_internal,
-            author:author_id(name, email)
+            sender:sender_id(name, email)
           )
         `)
         .eq("id", ticketId)
         .single()
 
+      console.log('[TicketDetail] Ticket query result:', {
+        found: !!data,
+        error: error?.message,
+        ticketId,
+        customerId: data?.customer?.id,
+        assigneeId: data?.assignee?.id,
+        status: data?.status
+      })
+
       if (error) throw error
 
       setTicket(data)
     } catch (error) {
-      console.error("Error loading ticket:", error)
+      console.error("[TicketDetail] Error loading ticket:", error)
+      if (error instanceof Error) {
+        console.error("[TicketDetail] Error details:", {
+          message: error.message,
+          name: error.name,
+          stack: error.stack
+        })
+      }
     } finally {
       setIsLoading(false)
     }
   }
 
   if (isLoading) {
+    console.log('[TicketDetail] Ticket is loading')
     return <div>Loading ticket details...</div>
   }
 
   if (!ticket) {
+    console.log('[TicketDetail] No ticket found')
     return <div>Ticket not found</div>
   }
+
+  console.log('[TicketDetail] Rendering ticket:', {
+    id: ticket.id,
+    status: ticket.status,
+    hasCustomer: !!ticket.customer,
+    hasAssignee: !!ticket.assignee,
+    responsesCount: ticket.responses?.length
+  })
 
   return (
     <div className="space-y-8">
@@ -126,23 +158,59 @@ export function TicketDetail({ ticketId }: { ticketId: string }) {
               </RoleGate>
             </TabsList>
             <TabsContent value="conversation" className="space-y-4">
-              {ticket.responses
-                .filter(r => !r.is_internal)
-                .map(response => (
-                  <Card key={response.id}>
-                    <CardHeader>
-                      <CardTitle className="text-sm font-medium">
-                        {response.author.name}
-                        <span className="ml-2 text-muted-foreground">
-                          {formatDistanceToNow(new Date(response.created_at), { addSuffix: true })}
-                        </span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="whitespace-pre-wrap">{response.content}</p>
-                    </CardContent>
-                  </Card>
-                ))}
+              <div className="space-y-4">
+                {ticket.responses
+                  .filter(r => !r.is_internal)
+                  .map(response => (
+                    <Card key={response.id}>
+                      <CardHeader>
+                        <CardTitle className="text-sm font-medium">
+                          {response.sender.name}
+                          <span className="ml-2 text-muted-foreground">
+                            {formatDistanceToNow(new Date(response.created_at), { addSuffix: true })}
+                          </span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="whitespace-pre-wrap">{response.content}</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+              </div>
+              
+              <Card>
+                <CardContent className="p-4">
+                  <ChatInput
+                    onSendMessage={async (content) => {
+                      try {
+                        const { data, error } = await supabase
+                          .from('ticket_responses')
+                          .insert({
+                            ticket_id: ticket.id,
+                            content,
+                            sender_id: user?.id,
+                            sender_type: role === 'customer' ? 'customer' : 'team_member',
+                            is_internal: false
+                          })
+                          .select()
+                          .single()
+
+                        if (error) throw error
+                        
+                        // Optimistically update the UI
+                        setTicket(prev => ({
+                          ...prev!,
+                          responses: [...prev!.responses, data]
+                        }))
+                      } catch (error) {
+                        console.error('Error sending response:', error)
+                        toast.error('Failed to send response')
+                      }
+                    }}
+                    disabled={isSubmitting}
+                  />
+                </CardContent>
+              </Card>
             </TabsContent>
             <RoleGate requireFeature="view_internal_notes">
               <TabsContent value="internal" className="space-y-4">
@@ -152,7 +220,7 @@ export function TicketDetail({ ticketId }: { ticketId: string }) {
                     <Card key={response.id}>
                       <CardHeader>
                         <CardTitle className="text-sm font-medium">
-                          {response.author.name}
+                          {response.sender.name}
                           <span className="ml-2 text-muted-foreground">
                             {formatDistanceToNow(new Date(response.created_at), { addSuffix: true })}
                           </span>
@@ -175,8 +243,8 @@ export function TicketDetail({ ticketId }: { ticketId: string }) {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                <p className="font-medium">{ticket.customer.name}</p>
-                <p className="text-sm text-muted-foreground">{ticket.customer.email}</p>
+                <p className="font-medium">{ticket.customer?.name}</p>
+                <p className="text-sm text-muted-foreground">{ticket.customer?.email}</p>
               </div>
             </CardContent>
           </Card>
@@ -273,17 +341,17 @@ export function TicketDetail({ ticketId }: { ticketId: string }) {
             </Card>
           )}
 
-          {Object.keys(ticket.custom_fields).length > 0 && (
+          {ticket.metadata && Object.keys(ticket.metadata).length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle>Custom Fields</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {Object.entries(ticket.custom_fields).map(([key, value]) => (
-                    <div key={key}>
-                      <p className="text-sm font-medium">{key}</p>
-                      <p className="text-sm text-muted-foreground">{value}</p>
+                  {Object.entries(ticket.metadata).map(([key, value]) => (
+                    <div key={key} className="flex justify-between">
+                      <span className="font-medium">{key}</span>
+                      <span>{String(value)}</span>
                     </div>
                   ))}
                 </div>

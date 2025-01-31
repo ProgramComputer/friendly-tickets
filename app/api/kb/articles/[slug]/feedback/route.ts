@@ -77,7 +77,7 @@ export async function POST(
       .from('kb_article_feedback')
       .upsert({
         article_id: params.slug,
-        user_id: user.user.id,
+        auth_user_id: user.user.id,
         is_helpful: isHelpful
       })
 

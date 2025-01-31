@@ -1,53 +1,130 @@
-import { createServerClient } from '@supabase/ssr'
+import { createServerClient as createServerClientBase, type CookieOptions } from '@supabase/ssr'
+import type { Database } from '@/types/global/supabase'
 import { cookies } from 'next/headers'
-import type { Database } from '@/types/supabase'
 
-export async function createServerSupabaseClient(cookieStore = cookies(), useServiceRole = false) {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL environment variable')
+let cookies: () => {
+  get: (name: string) => { name: string; value: string } | undefined
+  set: (options: { name: string; value: string; } & CookieOptions) => void
+}
+
+// Dynamically import cookies in app directory
+if (process.env.NEXT_PUBLIC_RUNTIME === 'edge' || process.env.NEXT_PUBLIC_RUNTIME === 'nodejs') {
+  import('next/headers').then((mod) => {
+    cookies = mod.cookies
+  })
+}
+
+export function createClient() {
+  if (!cookies) {
+    throw new Error('Cookies module not initialized. This client only works in Server Components.')
   }
 
-  const supabaseKey = useServiceRole 
-    ? process.env.SUPABASE_SERVICE_ROLE_KEY 
-    : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const cookieStore = cookies()
 
-  if (!supabaseKey) {
-    throw new Error(useServiceRole 
-      ? 'Missing SUPABASE_SERVICE_ROLE_KEY environment variable'
-      : 'Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable'
-    )
-  }
-
-  return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    supabaseKey,
+  return createServerClientBase<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name) {
+        get(name: string) {
           return cookieStore.get(name)?.value
         },
-        set(name, value, options) {
+        set(name: string, value: string, options: CookieOptions) {
           try {
-            cookieStore.set(name, value, options)
+            cookieStore.set({ name, value, ...options })
           } catch (error) {
-            // Handle cookies.set error in middleware
+            // Handle cookies in edge functions
           }
         },
-        remove(name, options) {
+        remove(name: string, options: CookieOptions) {
           try {
-            cookieStore.delete(name, options)
+            cookieStore.set({ name, value: '', ...options })
           } catch (error) {
-            // Handle cookies.delete error in middleware
+            // Handle cookies in edge functions
           }
         },
       },
-      auth: useServiceRole ? {
-        autoRefreshToken: false,
-        persistSession: false
-      } : undefined
     }
   )
 }
 
-// Also export as createClient for backward compatibility
-export const createClient = createServerSupabaseClient 
+// For pages directory and API routes
+export function createPagesClient(req: any, res: any) {
+  return createServerClientBase<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return req.cookies[name]
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          res.setHeader('Set-Cookie', `${name}=${value}; Path=/; HttpOnly; SameSite=Lax`)
+        },
+        remove(name: string, options: CookieOptions) {
+          res.setHeader('Set-Cookie', `${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`)
+        },
+      },
+    }
+  )
+}
+
+// For middleware
+export function createMiddlewareClient(request: Request) {
+  let response = new Response()
+
+  const supabase = createServerClientBase<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return request.headers.get(`cookie`)?.split(';').find(c => c.trim().startsWith(`${name}=`))?.split('=')[1]
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          response.headers.append('Set-Cookie', `${name}=${value}; Path=/; HttpOnly; SameSite=Lax`)
+        },
+        remove(name: string, options: CookieOptions) {
+          response.headers.append('Set-Cookie', `${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`)
+        },
+      },
+    }
+  )
+
+  return { supabase, response }
+}
+
+export function createServerSupabaseClient(cookieStore?: any, useServiceRole = false) {
+  return createServerClientBase<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    useServiceRole ? process.env.SUPABASE_SERVICE_ROLE_KEY! : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore?.get(name)?.value
+        },
+        set(name: string, value: string, options: any) {
+          try {
+            cookies().set(name, value, options)
+          } catch (error) {
+            // Handle edge case for middleware
+          }
+        },
+        remove(name: string, options: any) {
+          try {
+            cookies().delete(name)
+          } catch (error) {
+            // Handle edge case for middleware
+          }
+        },
+      },
+    }
+  )
+}
+
+export async function getSession() {
+  const supabase = createClient()
+  const { data: { session }, error } = await supabase.auth.getSession()
+  if (error) throw error
+  return session
+} 

@@ -1,9 +1,12 @@
+import { createClient } from '@/lib/supabase/server'
 import { supabase } from '@/lib/supabase/client'
-import { UserRole } from '@/types/auth'
+import { UserRole } from '@/types/shared/auth'
+import { Session, User } from '@supabase/supabase-js'
 
 export interface AuthResult {
   success: boolean
   error?: string
+  role?: UserRole
 }
 
 export const authService = {
@@ -24,8 +27,8 @@ export const authService = {
       const { data: profile, error: profileError } = await supabase
         .from('team_members')
         .select('role')
-        .eq('user_id', authData.user.id)
-        .single()
+        .eq('auth_user_id', authData.user.id)
+        .maybeSingle()
 
       if (profileError) throw profileError
 
@@ -38,7 +41,7 @@ export const authService = {
         }
       }
 
-      return { success: true }
+      return { success: true, role: profile.role as UserRole }
     } catch (error) {
       return {
         success: false,
@@ -71,8 +74,9 @@ export const authService = {
       const { data: profile } = await supabase
         .from('team_members')
         .select('role')
-        .eq('user_id', user.id)
-        .single()
+        .eq('auth_user_id', user.id)
+        .limit(1)
+        .maybeSingle()
 
       return {
         ...user,
@@ -83,4 +87,38 @@ export const authService = {
       return null
     }
   }
+}
+
+export async function getTeamMemberRole(authData: Session): Promise<string | null> {
+  const supabase = await createClient()
+
+  const { data: teamMember, error } = await supabase
+    .from('team_members')
+    .select('role')
+    .eq('auth_user_id', authData.user.id)
+    .maybeSingle()
+
+  if (error) {
+    console.error('Error fetching role:', error)
+    return null
+  }
+
+  return teamMember?.role || null
+}
+
+export async function getUserRole(user: User): Promise<string | null> {
+  const supabase = await createClient()
+
+  const { data: teamMember, error } = await supabase
+    .from('team_members')
+    .select('role')
+    .eq('auth_user_id', user.id)
+    .maybeSingle()
+
+  if (error) {
+    console.error('Error fetching role:', error)
+    return null
+  }
+
+  return teamMember?.role || 'customer'
 } 

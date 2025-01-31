@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client'
+import { createClient, createPagesClient } from '@/lib/supabase/server'
 import type {
   Ticket,
   TicketListParams,
@@ -9,8 +10,25 @@ import type {
   CreateAgentTicketInput,
   CreateAdminTicketInput,
   SLAPolicy,
-  TicketWithRelations
-} from '@/types/tickets'
+  TicketWithRelations,
+  TicketStatus,
+  Department,
+  TicketPriority,
+  MessageSenderType
+} from '@/types'
+import { Database } from '@/types/global/supabase'
+
+type DbTicketPriority = Database['public']['Enums']['ticket_priority']
+
+// For server-side operations in app directory
+async function getServerClient() {
+  return createClient()
+}
+
+// For pages directory and API routes
+export async function getPagesServerClient(req: any, res: any) {
+  return createPagesClient(req, res)
+}
 
 // Client-side queries
 export async function getTickets({
@@ -19,35 +37,65 @@ export async function getTickets({
   sort = { field: 'created_at', direction: 'desc' },
   filters,
 }: TicketListParams): Promise<TicketListResponse> {
+  const supabase = await createClient()
+
   // Get current user
   const { data: { user } } = await supabase.auth.getUser()
+  console.log('[Tickets] Auth check:', { authenticated: !!user })
   if (!user) throw new Error('Not authenticated')
 
-  // First check if user is a customer by joining through user_id
+  // Try to get team member first
+  const { data: teamMember } = await supabase
+    .from('team_members')
+    .select('id, role')
+    .eq('auth_user_id', user.id)
+    .single()
+
+  // If not a team member, try to get customer
   const { data: customer } = await supabase
     .from('customers')
-    .select('id, user_id')
-    .eq('user_id', user.id)
-    .maybeSingle()
+    .select('id')
+    .eq('auth_user_id', user.id)
+    .single()
 
+  console.log('[Tickets] User role check:', { 
+    isTeamMember: !!teamMember,
+    isCustomer: !!customer,
+    role: teamMember?.role || 'customer'
+  })
+
+  // Build the query based on user role
   let query = supabase
     .from('tickets')
     .select(`
       *,
-      customer:customers!customer_id(*),
+      customer:customers!customer_id(id, auth_user_id, email, name, avatar_url, created_at, updated_at),
       assignee:team_members!assignee_id(*),
       department:departments!department_id(*),
-      messages:ticket_messages(count)
+      messages:ticket_messages(count),
+      tags:ticket_tags(tag:tags(*))
     `)
 
-  // If user is a customer, filter by customer.id (not user_id)
-  if (customer) {
+  // Apply role-based filters
+  if (teamMember) {
+    // Team members can see assigned tickets or all tickets if admin
+    if (teamMember.role === 'admin') {
+      // Admins see all tickets
+    } else {
+      // Agents see assigned tickets
+      query = query.eq('assignee_id', teamMember.id)
+    }
+  } else if (customer) {
+    // Customers only see their own tickets
     query = query.eq('customer_id', customer.id)
+  } else {
+    throw new Error('User not found in system')
   }
 
-  // Only apply filters if they have values
+  // Apply filters if they have values
   if (filters?.status?.length > 0) {
     query = query.in('status', filters.status)
+    console.log('[Tickets] Applied status filter:', filters.status)
   }
 
   if (filters?.priority?.length > 0) {
@@ -79,8 +127,15 @@ export async function getTickets({
   query = query.limit(limit)
 
   const { data: tickets, error, count } = await query
+  console.log('Query results:', { 
+    ticketsFound: tickets?.length ?? 0,
+    totalCount: count,
+    error: error?.message,
+    customerIdUsed: customer?.id
+  })
 
   if (error) {
+    console.error('Error fetching tickets:', error)
     throw error
   }
 
@@ -89,7 +144,7 @@ export async function getTickets({
     tickets.length === limit ? tickets[tickets.length - 1].created_at : undefined
 
   return {
-    tickets: tickets as Ticket[],
+    tickets: tickets as unknown as TicketWithRelations[],
     nextCursor,
     total: count ?? 0,
   }
@@ -217,13 +272,30 @@ export async function getSLAPolicies(): Promise<SLAPolicy[]> {
     throw error
   }
 
-  return data
+  return (data || []).map(policy => ({
+    id: policy.id,
+    name: policy.name,
+    description: policy.description || '',
+    priority: policy.priority as TicketPriority,
+    response_time_minutes: policy.response_time_hours * 60,
+    resolution_time_minutes: policy.resolution_time_hours * 60,
+    created_at: policy.created_at || new Date().toISOString(),
+    updated_at: policy.updated_at || new Date().toISOString()
+  }))
 }
 
-export async function createSLAPolicy(policy: Omit<SLAPolicy, 'id' | 'created_at'>): Promise<SLAPolicy> {
+export async function createSLAPolicy(policy: Omit<SLAPolicy, 'id' | 'created_at' | 'updated_at'>): Promise<SLAPolicy> {
+  const dbPolicy = {
+    name: policy.name,
+    description: policy.description,
+    priority: policy.priority,
+    response_time_hours: policy.response_time_minutes / 60,
+    resolution_time_hours: policy.resolution_time_minutes / 60
+  }
+
   const { data, error } = await supabase
     .from('sla_policies')
-    .insert(policy)
+    .insert(dbPolicy)
     .select()
     .single()
 
@@ -231,13 +303,30 @@ export async function createSLAPolicy(policy: Omit<SLAPolicy, 'id' | 'created_at
     throw error
   }
 
-  return data
+  return {
+    id: data.id,
+    name: data.name,
+    description: data.description || '',
+    priority: data.priority as TicketPriority,
+    response_time_minutes: data.response_time_hours * 60,
+    resolution_time_minutes: data.resolution_time_hours * 60,
+    created_at: data.created_at || new Date().toISOString(),
+    updated_at: data.updated_at || new Date().toISOString()
+  }
 }
 
 export async function updateSLAPolicy(id: string, policy: Partial<SLAPolicy>): Promise<SLAPolicy> {
+  const dbUpdates = {
+    ...(policy.name && { name: policy.name }),
+    ...(policy.description && { description: policy.description }),
+    ...(policy.priority && { priority: policy.priority }),
+    ...(policy.response_time_minutes && { response_time_hours: policy.response_time_minutes / 60 }),
+    ...(policy.resolution_time_minutes && { resolution_time_hours: policy.resolution_time_minutes / 60 })
+  }
+
   const { data, error } = await supabase
     .from('sla_policies')
-    .update(policy)
+    .update(dbUpdates)
     .eq('id', id)
     .select()
     .single()
@@ -246,7 +335,16 @@ export async function updateSLAPolicy(id: string, policy: Partial<SLAPolicy>): P
     throw error
   }
 
-  return data
+  return {
+    id: data.id,
+    name: data.name,
+    description: data.description || '',
+    priority: data.priority as TicketPriority,
+    response_time_minutes: data.response_time_hours * 60,
+    resolution_time_minutes: data.resolution_time_hours * 60,
+    created_at: data.created_at || new Date().toISOString(),
+    updated_at: data.updated_at || new Date().toISOString()
+  }
 }
 
 export async function deleteSLAPolicy(id: string): Promise<void> {
@@ -279,7 +377,7 @@ export async function checkSLABreaches(): Promise<void> {
       sla_policy:sla_policies(*)
     `)
     .not('sla_policy_id', 'is', null)
-    .in('status', ['open', 'in_progress'])
+    .in('status', ['open', 'pending'] as TicketStatus[])
 
   if (error) {
     throw error
@@ -289,13 +387,13 @@ export async function checkSLABreaches(): Promise<void> {
     const slaPolicy = ticket.sla_policy
     const createdAt = new Date(ticket.created_at)
     const now = new Date()
-    const responseTime = (now.getTime() - createdAt.getTime()) / (1000 * 60) // in minutes
+    const responseTimeMinutes = (now.getTime() - createdAt.getTime()) / (1000 * 60)
 
-    if (responseTime > slaPolicy.response_time_minutes) {
+    if (responseTimeMinutes > (slaPolicy.response_time_hours * 60)) {
       await supabase
         .from('tickets')
         .update({
-          sla_breached: true,
+          sla_breach: true,
           sla_breach_time: now.toISOString()
         })
         .eq('id', ticket.id)
@@ -304,7 +402,7 @@ export async function checkSLABreaches(): Promise<void> {
 }
 
 export async function getAllTickets(): Promise<TicketWithRelations[]> {
-  const supabase = await getServerClient()
+  const supabase = await createClient()
   
   const { data, error } = await supabase
     .from("tickets")
@@ -326,35 +424,60 @@ export async function getAllTickets(): Promise<TicketWithRelations[]> {
 }
 
 export async function getTicketWithRelations(id: string): Promise<TicketWithRelations> {
-  const supabase = await getServerClient()
+  const supabase = await createClient()
 
-  const { data, error } = await supabase
-    .from("tickets")
+  const { data: ticket, error } = await supabase
+    .from('tickets')
     .select(`
       *,
-      customer:customers(*),
-      assignee:team_members(*),
-      department:departments(*),
-      sla_policy:sla_policies(*),
-      tags:ticket_tags(tag:tags(*)),
+      customer:customers(id, auth_user_id, email, name, avatar_url, created_at, updated_at),
+      assignee:team_members(id, auth_user_id, email, name, role, department, created_at, updated_at),
+      department:departments(id, name, description, created_at),
       messages:ticket_messages(
-        *,
-        sender:team_members(*),
-        attachments:message_attachments(*)
-      )
+        id, ticket_id, sender_type, sender_id, content, is_internal, created_at,
+        attachments
+      ),
+      sla_policy:sla_policies(*)
     `)
-    .eq("id", id)
+    .eq('id', id)
     .single()
 
   if (error) {
-    throw new Error("Failed to fetch ticket")
+    throw error
   }
 
-  return data as TicketWithRelations
+  if (!ticket) {
+    throw new Error('Ticket not found')
+  }
+
+  // Transform the data to match TicketWithRelations type
+  return {
+    ...ticket,
+    customer: ticket.customer,
+    assignee: ticket.assignee,
+    department: ticket.department ? {
+      id: ticket.department.id,
+      name: ticket.department.name,
+      description: ticket.department.description || '',
+      createdAt: ticket.department.created_at
+    } : undefined,
+    messages: ticket.messages || [],
+    sla_policy: ticket.sla_policy ? {
+      id: ticket.sla_policy.id,
+      name: ticket.sla_policy.name,
+      description: ticket.sla_policy.description || '',
+      priority: ticket.sla_policy.priority,
+      response_time_minutes: ticket.sla_policy.response_time_hours * 60,
+      resolution_time_minutes: ticket.sla_policy.resolution_time_hours * 60,
+      created_at: ticket.sla_policy.created_at,
+      updated_at: ticket.sla_policy.updated_at
+    } : undefined,
+    tags: []  // TODO: Add tags support
+  } as TicketWithRelations
 }
 
 export async function getUserRole(): Promise<string | null> {
-  const supabase = await getServerClient()
+  const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
@@ -362,8 +485,8 @@ export async function getUserRole(): Promise<string | null> {
   const { data: teamMember, error } = await supabase
     .from('team_members')
     .select('role')
-    .eq('user_id', user.id)
-    .single()
+    .eq('auth_user_id', user.id)
+    .maybeSingle()
 
   if (error) {
     console.error('Error fetching role:', error)
@@ -373,36 +496,32 @@ export async function getUserRole(): Promise<string | null> {
   return teamMember?.role || 'customer'
 }
 
-export async function updateTicketStatus(ticketId: string, status: string): Promise<void> {
-  const supabase = await getServerClient()
+export async function updateTicketStatus(ticketId: string, status: TicketStatus): Promise<void> {
+  const supabase = await createClient()
   const { error } = await supabase
     .from('tickets')
     .update({ status })
     .eq('id', ticketId)
 
   if (error) {
-    throw new Error('Failed to update ticket status')
+    throw error
   }
-
-  return
 }
 
-export async function updateTicketPriority(ticketId: string, priority: string): Promise<void> {
-  const supabase = await getServerClient()
+export async function updateTicketPriority(ticketId: string, priority: TicketPriority): Promise<void> {
+  const supabase = await createClient()
   const { error } = await supabase
     .from('tickets')
     .update({ priority })
     .eq('id', ticketId)
 
   if (error) {
-    throw new Error('Failed to update ticket priority')
+    throw error
   }
-
-  return
 }
 
 export async function updateTicketAssignee(ticketId: string, assigneeId: string | null): Promise<void> {
-  const supabase = await getServerClient()
+  const supabase = await createClient()
   const { error } = await supabase
     .from('tickets')
     .update({ assignee_id: assigneeId })
@@ -420,7 +539,7 @@ export async function addTicketReply(
   content: string,
   attachments: { name: string; url: string; size: number }[] = []
 ): Promise<void> {
-  const supabase = await getServerClient()
+  const supabase = await createClient()
   
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
@@ -455,4 +574,36 @@ export async function addTicketReply(
   }
 
   return
+}
+
+export async function createTicketMessage({
+  ticketId,
+  content,
+  senderId,
+  senderType,
+  isInternal = false,
+  attachments = []
+}: {
+  ticketId: string
+  content: string
+  senderId: string
+  senderType: MessageSenderType
+  isInternal?: boolean
+  attachments?: string[]
+}) {
+  const { data: message, error } = await supabase
+    .from('ticket_messages')
+    .insert({
+      ticket_id: ticketId,
+      content,
+      sender_id: senderId,
+      sender_type: senderType,
+      is_internal: isInternal,
+      attachments: attachments.length ? attachments : null
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return message
 } 

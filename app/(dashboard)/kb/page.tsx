@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Search, Book, FileText, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
-import { getCategories, searchArticles } from '@/lib/services/knowledge-base'
+import { getCategories, searchArticles, getRecentArticles } from '@/lib/services/knowledge-base'
 import { useQuery } from '@tanstack/react-query'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 
@@ -23,6 +23,11 @@ export default function KnowledgeBasePage() {
     queryKey: ['kb-search', debouncedQuery],
     queryFn: () => searchArticles(debouncedQuery),
     enabled: debouncedQuery.length > 0
+  })
+
+  const { data: recentArticles = [] } = useQuery({
+    queryKey: ['kb-recent-articles'],
+    queryFn: getRecentArticles
   })
 
   return (
@@ -119,28 +124,21 @@ export default function KnowledgeBasePage() {
                 </div>
               </section>
 
-              {/* Popular Articles */}
-              <section aria-label="Popular Articles" className="mt-12">
-                <h2 className="text-xl font-semibold mb-4">Popular Articles</h2>
+              {/* Recent Articles */}
+              <section aria-label="Recent Articles" className="mt-12">
+                <h2 className="text-xl font-semibold mb-4">Recent Articles</h2>
                 <div className="grid gap-3">
-                  <Button variant="ghost" className="justify-start" asChild>
-                    <Link href="/kb/articles/getting-started">
-                      <FileText className="h-4 w-4 mr-2" aria-hidden="true" />
-                      Getting Started with AutoCRM
-                    </Link>
-                  </Button>
-                  <Button variant="ghost" className="justify-start" asChild>
-                    <Link href="/kb/articles/create-ticket">
-                      <FileText className="h-4 w-4 mr-2" aria-hidden="true" />
-                      How to Create Your First Ticket
-                    </Link>
-                  </Button>
-                  <Button variant="ghost" className="justify-start" asChild>
-                    <Link href="/kb/articles/chat-features">
-                      <FileText className="h-4 w-4 mr-2" aria-hidden="true" />
-                      Using the Chat Features
-                    </Link>
-                  </Button>
+                  {recentArticles.map((article) => (
+                    <Button key={article.id} variant="ghost" className="justify-start" asChild>
+                      <Link href={`/kb/articles/${article.id}`}>
+                        <FileText className="h-4 w-4 mr-2" aria-hidden="true" />
+                        {article.title}
+                      </Link>
+                    </Button>
+                  ))}
+                  {recentArticles.length === 0 && (
+                    <p className="text-muted-foreground text-sm">No articles available.</p>
+                  )}
                 </div>
               </section>
             </>

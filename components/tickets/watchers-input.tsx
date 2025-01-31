@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { X } from "lucide-react"
 import { useState } from "react"
+import { WatchersInputProps } from '@/types/shared/props'
 
 interface WatchersInputProps {
   control: Control<any>

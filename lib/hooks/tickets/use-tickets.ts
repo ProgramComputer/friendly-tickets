@@ -8,7 +8,7 @@ import type {
   CreateTicketInput,
   UpdateTicketInput,
   TicketListResponse,
-} from '@/types/tickets'
+} from '@/types/features/tickets'
 import {
   getTickets,
   getTicketById,
@@ -17,7 +17,7 @@ import {
   subscribeToTicketUpdates,
 } from '@/lib/supabase/domain/tickets/queries'
 import { createBrowserClient } from '@supabase/ssr'
-import { Database } from '@/lib/supabase/database.types'
+import { Database } from '@/types'
 import { useSupabase } from '@/lib/supabase/client'
 
 // Query keys
@@ -40,7 +40,7 @@ export async function getTeamMemberRole(userId: string) {
     const { data, error } = await supabase
       .from('team_members')
       .select('role')
-      .eq('user_id', userId)
+      .eq('auth_user_id', userId)
       .maybeSingle()
 
     if (error) {
@@ -66,11 +66,56 @@ export function useTeamMemberRole(userId: string | undefined) {
 // Hooks
 export function useTickets(params: TicketListParams) {
   const supabase = useSupabase()
+  const queryClient = useQueryClient()
   
+  // Set up real-time subscription
+  useEffect(() => {
+    const channel = supabase
+      .channel('tickets-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tickets'
+        },
+        () => {
+          console.log('[Tickets] Real-time update received, invalidating query')
+          queryClient.invalidateQueries({ queryKey: ['tickets', params] })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      channel.unsubscribe()
+    }
+  }, [supabase, queryClient, params])
+
   return useInfiniteQuery({
     queryKey: ['tickets', params],
     queryFn: async ({ pageParam }) => {
-      const { data, error } = await supabase
+      console.log('[Tickets] Starting ticket fetch with params:', { pageParam, params })
+      
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser()
+      console.log('[Tickets] Current user:', { id: user?.id, email: user?.email })
+      if (!user) throw new Error('Not authenticated')
+
+      // Check if user is a team member (agent/admin)
+      const { data: teamMember, error: teamMemberError } = await supabase
+        .from('team_members')
+        .select('id, role, department_id')
+        .eq('auth_user_id', user.id)
+        .maybeSingle()
+        
+      console.log('[Tickets] Team member lookup:', { 
+        found: !!teamMember,
+        role: teamMember?.role,
+        departmentId: teamMember?.department_id,
+        error: teamMemberError?.message 
+      })
+
+      let query = supabase
         .from('tickets')
         .select(`
           *,
@@ -79,10 +124,55 @@ export function useTickets(params: TicketListParams) {
           department:departments!department_id(*),
           messages:ticket_messages(count)
         `)
-        .order(params.sort?.field || 'created_at', { 
-          ascending: params.sort?.direction === 'asc' 
+
+      // Apply role-based filters
+      if (teamMember) {
+        console.log('[Tickets] Applying team member filters:', { role: teamMember.role })
+        if (teamMember.role === 'admin') {
+          console.log('[Tickets] Admin role - no filters applied')
+        } else if (teamMember.role === 'agent') {
+          console.log('[Tickets] Agent role - filtering by assignment and department:', {
+            agentId: teamMember.id,
+            departmentId: teamMember.department_id
+          })
+          query = query.or(`assignee_id.eq.${teamMember.id},and(department_id.eq.${teamMember.department_id},assignee_id.is.null)`)
+        }
+      } else {
+        // Get customer ID for customer role
+        const { data: customer, error: customerError } = await supabase
+          .from('customers')
+          .select('id')
+          .eq('auth_user_id', user.id)
+          .single()
+
+        console.log('[Tickets] Customer lookup:', { 
+          userId: user.id, 
+          customerId: customer?.id,
+          found: !!customer,
+          error: customerError?.message 
         })
-        .range(pageParam || 0, (pageParam || 0) + 9)
+
+        if (!customer) throw new Error('User has no valid role')
+        
+        console.log('[Tickets] Customer role - filtering by customer_id:', customer.id)
+        query = query.eq('customer_id', customer.id)
+      }
+
+      // Apply sorting
+      query = query.order(params.sort?.field || 'created_at', { 
+        ascending: params.sort?.direction === 'asc' 
+      })
+      .range(pageParam || 0, (pageParam || 0) + 9)
+
+      const { data, error } = await query
+
+      console.log('[Tickets] Query results:', { 
+        ticketsFound: data?.length ?? 0,
+        role: teamMember?.role || 'customer',
+        error: error?.message,
+        filters: params,
+        pageParam
+      })
 
       if (error) throw error
       

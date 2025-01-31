@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts"
 import { createBrowserClient } from '@supabase/ssr'
-import { Database } from '@/lib/supabase/database.types'
+import { Database } from '@/types'
 
 interface TeamPerformance {
   name: string

@@ -143,15 +143,15 @@ Adopt a clear, modular directory structure:
 │   │   ├── client/         # Client-only code
 │   │   │   └── hooks/
 │   │   │   └── utils/
-│   │   ├── shared/         # Shared between client/server
-│   │   │   └── types/
-│   │   │   └── schemas/
-│   │   │   └── constants/
 │   │   └── providers.tsx    # Client providers
-│   ├── public/               # Static assets
-│   ├── services/             # Business logic and data-fetching services
-│   ├── types/                # Global TypeScript types and interfaces
-│   └── config/               # Configuration files (env, tailwind, etc.)
+│   ├── types/                # All TypeScript types
+│   │   ├── global/           # Global types (DB, env)
+│   │   ├── shared/           # Shared types
+│   │   ├── features/         # Feature-specific types
+│   │   └── providers.tsx    # Client providers
+│   ├── public/             # Static assets
+│   ├── services/           # Business logic and data-fetching services
+│   └── config/             # Configuration files (env, tailwind, etc.)
 ```
 
 **Naming & Organization:**
@@ -234,20 +234,19 @@ function formatInput({ input }: { input: string }) {
 - Fetch latest Supabase documentation from https://supabase.com/docs/reference/javascript;
 
 - **Schema Management**: 
-  - ALWAYS use CLI for migrations: `npx supabase migration new <name>`
+  - ALWAYS use CLI for migrations: `supabase migration new <name>`
   - Keep migrations folder under `supabase/migrations` updated with remote changes
-  - Test migrations locally before pushing: `npx supabase db reset`
-  - Push to production using: `npx supabase db push`
+  - Push to production using: `supabase db push`
 
 - **Types Management**: 
-  - Generate types after schema changes: `npx supabase gen types typescript`
+  - Generate types after schema changes: `supabase gen types typescript`
   - Keep `database.types.ts` updated with latest schema
   - Use generated types in your TypeScript code
 
 - **Edge Functions**: 
-  - Create using CLI: `npx supabase functions new <name>`
+  - Create using CLI: `supabase functions new <name>`
   - Test locally before deployment
-  - Deploy using CLI: `npx supabase functions deploy <name>`
+  - Deploy using CLI: `supabase functions deploy <name>`
   - Monitor function logs through Supabase dashboard
 
 ## Working with cookies
@@ -498,7 +497,6 @@ order by
 - **Branch Naming**: `feature/`, `bugfix/`, `hotfix/`, `refactor/`, `docs/`.
 - **Commit Messages**: Use `type(scope): description` format. Common types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`.
 - **Pull Requests**: Use PR templates with a summary, change type, testing steps, and any database changes noted.
-- **Schema Updates**: Update `schema.sql` and commit the changes after each migration.
 - **Testing Before PR**: Always test changes locally before submitting PRs.
 
 ---
@@ -555,7 +553,7 @@ order by
 
 - **CRITICAL: Migration File Management**
   - NEVER modify existing migration files. Each change requires a new migration file with a fresh timestamp.
-  - Use `npx supabase migration new <descriptive-name>` to create new migrations.
+  - Use `supabase migration new <descriptive-name>` to create new migrations.
   - Keep migration names short but descriptive (e.g., `add-user-index`, `update-ticket-constraints`).
   - One logical change per migration file - don't combine unrelated schema changes.
   - Test migrations locally before pushing to production.
@@ -570,8 +568,7 @@ order by
 - **Schema Management**
   - Keep `supabase/migrations/` in sync with remote changes.
   - Document schema changes in both migration files and project documentation.
-  - Use `npx supabase db reset` for local development only.
-  - Use `npx supabase db push` for remote database updates.
+  - Use `supabase db push` for remote database updates.
   - Never use `db reset` on production/remote databases.
 
 - **Types and Validation**
@@ -623,15 +620,12 @@ order by
 
 - **CLI-First Development**
   - ALWAYS use Supabase CLI commands for database operations:
-    - `npx supabase migration new <name>` for creating migrations
-    - `npx supabase db push` for applying migrations to remote
-    - `npx supabase db reset` for local development only
-    - `npx supabase functions new <name>` for creating edge functions
-    - `npx supabase functions deploy <name>` for deploying functions
+    - `supabase migration new <name>` for creating migrations
+    - `supabase db push` for applying migrations to remote
+    - `supabase functions new <name>` for creating edge functions
+    - `supabase functions deploy <name>` for deploying functions
   - NEVER modify existing migration files - create new ones for changes
-  - Generate types after schema changes: `npx supabase gen types typescript`
-  - Use `npx supabase start` for local development
-  - Test migrations locally before pushing to production
+  - Generate types after schema changes: `supabase gen types typescript`
 
 - **Migration File Management**
   - One logical change per migration file
@@ -641,18 +635,12 @@ order by
   - Document complex migrations with clear comments
 
 - **Edge Functions Development**
-  - Create using CLI: `npx supabase functions new <name>`
-  - Test locally using `npx supabase functions serve`
-  - Deploy using CLI: `npx supabase functions deploy`
+  - Create using CLI: `supabase functions new <name>`
+  - Test locally using `supabase functions serve`
+  - Deploy using CLI: `supabase functions deploy`
   - Keep functions focused and single-purpose
   - Include proper error handling and logging
 
-- **Local Development**
-  - Start services: `npx supabase start`
-  - Reset local DB: `npx supabase db reset`
-  - Test functions: `npx supabase functions serve`
-  - Generate types: `npx supabase gen types typescript`
-  - Stop services: `npx supabase stop`
 
 ## Shadcn/UI Conventions
 

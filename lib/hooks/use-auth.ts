@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ROUTES } from "@/lib/constants/routes"
-import { supabase } from "@/lib/supabase/client"
+import { useSupabase } from "@/lib/supabase/client"
 
 export type UserRole = "customer" | "agent" | "admin"
 
@@ -68,80 +68,78 @@ export function useAuth(): UseAuthReturn {
   const [role, setRole] = useState<UserRole | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
+  const supabase = useSupabase()
 
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('[Auth] Initial session:', {
+        hasSession: !!session,
+        user: session?.user?.email
+      })
       setUser(session?.user ?? null)
       if (session?.user) {
-        getRole(session.user.id)
+        checkRole(session.user.id)
       } else {
         setRole(null)
         setIsLoading(false)
       }
     })
 
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // Subscribe to auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[Auth] Auth state changed:', { event, user: session?.user?.email })
       setUser(session?.user ?? null)
+      
       if (session?.user) {
-        getRole(session.user.id)
+        await checkRole(session.user.id)
       } else {
         setRole(null)
         setIsLoading(false)
-        router.push(ROUTES.auth.login)
       }
     })
 
     return () => {
       subscription.unsubscribe()
     }
-  }, [router])
+  }, [supabase])
 
-  async function getRole(userId: string) {
+  async function checkRole(userId: string) {
+    console.log('[Auth] Checking role for user:', userId)
     try {
-      // First check if user is a team member
-      const { data: teamMember, error: teamError } = await supabase
-        .from("team_members")
-        .select("role")
-        .eq("user_id", userId)
-        .single()
+      setIsLoading(true)
 
-      if (teamError && teamError.code !== 'PGRST116') {
-        throw teamError
-      }
+      // Check if user is a team member (agent/admin)
+      const { data: teamMember, error: teamError } = await supabase
+        .from('team_members')
+        .select('role')
+        .eq('auth_user_id', userId)
+        .maybeSingle()
+
+      console.log('[Auth] Team member check:', { teamMember, error: teamError })
 
       if (teamMember) {
         setRole(teamMember.role as UserRole)
+        setIsLoading(false)
+        return
+      }
+
+      // If not a team member, check if they're a customer
+      const { data: customer, error: customerError } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('auth_user_id', userId)
+        .maybeSingle()
+
+      console.log('[Auth] Customer check:', { customer, error: customerError })
+
+      if (customer) {
+        setRole('customer')
       } else {
-        // If not a team member, check if they're a customer
-        const { data: customer, error: customerError } = await supabase
-          .from("customers")
-          .select("id")
-          .eq("user_id", userId)
-          .single()
-
-        if (customerError && customerError.code !== 'PGRST116') {
-          throw customerError
-        }
-
-        if (customer) {
-          setRole("customer")
-        } else {
-          // If neither team member nor customer, create as customer
-          const { error: createError } = await supabase
-            .from("customers")
-            .insert({ user_id: userId })
-
-          if (createError) throw createError
-          setRole("customer")
-        }
+        setRole(null)
       }
     } catch (error) {
-      console.error("Error fetching role:", error)
-      // Don't set a default role on error anymore
+      console.error('[Auth] Error checking role:', error)
       setRole(null)
     } finally {
       setIsLoading(false)

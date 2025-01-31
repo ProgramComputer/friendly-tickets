@@ -23,8 +23,8 @@ interface CreateNoteInput {
 
 async function getNotes(ticketId: string): Promise<Note[]> {
   const { data, error } = await supabase
-    .from('notes')
-    .select('*, author:team_members!author_id(*)')
+    .from('ticket_responses')
+    .select('*, sender:team_members!sender_id(*)')
     .eq('ticket_id', ticketId)
     .order('created_at')
 

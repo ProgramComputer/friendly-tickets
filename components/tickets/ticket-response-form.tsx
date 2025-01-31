@@ -55,7 +55,7 @@ export function TicketResponseForm({ ticketId, onSuccess }: TicketResponseFormPr
         ticket_id: ticketId,
         content: values.content,
         is_internal: values.isInternal,
-        author_id: user.id,
+        sender_id: user.id,
       })
 
       if (error) throw error

@@ -17,11 +17,15 @@ import {
   Tag,
   MoreHorizontal,
   Filter,
+  Archive,
+  History,
+  TicketIcon,
 } from 'lucide-react'
 import { ChatContainer } from './chat-container'
 import { QuickResponses } from './quick-responses'
 import { useSupabase } from '@/lib/supabase/client'
 import { getActiveSessions } from '@/lib/services/chat-session'
+import { cn } from '@/lib/utils'
 
 interface AgentWorkspaceProps {
   className?: string
@@ -78,35 +82,35 @@ export function AgentWorkspace({ className }: AgentWorkspaceProps) {
 
   // Subscribe to presence changes
   useEffect(() => {
-    if (!session?.user?.id) return
+    if (session?.user) {
+      const channel = supabase.channel('online-agents')
+      
+      channel
+        .on('presence', { event: 'sync' }, () => {
+          const state = channel.presenceState()
+          setOnlineUsers(state)
+        })
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            await channel.track({ auth_user_id: session.user.id })
+          }
+        })
 
-    const channel = supabase
-      .channel('online-users')
-      .on('presence', { event: 'sync' }, () => {
-        const newState = channel.presenceState()
-        const online = new Set(Object.keys(newState))
-        setOnlineUsers(online)
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await channel.track({ user_id: session.user.id })
-        }
-      })
-
-    return () => {
-      supabase.removeChannel(channel)
+      return () => {
+        channel.unsubscribe()
+      }
     }
-  }, [session?.user?.id])
+  }, [session])
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full bg-background">
       {/* Sidebar */}
-      <div className="w-64 border-r bg-muted/10">
-        <div className="p-4 space-y-4">
+      <div className="w-80 border-r bg-card/50">
+        <div className="p-6 space-y-6">
           {/* Action Buttons */}
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" className="w-full">
-              <Clock className="h-4 w-4 mr-2" />
+            <Button size="sm" variant="outline" className="w-full font-medium">
+              <Clock className="h-4 w-4 mr-2 text-green-500" />
               Available
             </Button>
             <Button size="sm" variant="outline" className="w-10 px-0">
@@ -116,79 +120,116 @@ export function AgentWorkspace({ className }: AgentWorkspaceProps) {
 
           {/* Chat Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="w-full">
-              <TabsTrigger value="active" className="flex-1">
+            <TabsList className="w-full bg-background">
+              <TabsTrigger value="active" className="flex-1 font-medium">
                 Active
-                <Badge variant="secondary" className="ml-2">
+                <Badge variant="secondary" className="ml-2 font-normal">
                   {sessions.filter((s) => s.customer.status === 'active').length}
                 </Badge>
               </TabsTrigger>
-              <TabsTrigger value="waiting" className="flex-1">
+              <TabsTrigger value="waiting" className="flex-1 font-medium">
                 Waiting
-                <Badge variant="secondary" className="ml-2">
+                <Badge variant="secondary" className="ml-2 font-normal">
                   {sessions.filter((s) => s.customer.status === 'waiting').length}
                 </Badge>
               </TabsTrigger>
-              <TabsTrigger value="closed" className="flex-1">
+              <TabsTrigger value="closed" className="flex-1 font-medium">
                 Closed
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="active" className="m-0">
-              <ScrollArea className="h-[calc(100vh-12rem)]">
-                {sessions
-                  .filter((s) => s.customer.status === 'active')
-                  .map((session) => (
-                    <Card
-                      key={session.id}
-                      className={`p-4 mb-2 cursor-pointer hover:bg-accent/50 ${
-                        selectedSession === session.id ? 'bg-accent' : ''
-                      }`}
-                      onClick={() => setSelectedSession(session.id)}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <div className="font-medium">{session.customer.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {session.customer.lastMessage}
+            <TabsContent value="active" className="m-0 mt-4">
+              <ScrollArea className="h-[calc(100vh-14rem)]">
+                <div className="space-y-2 pr-4">
+                  {sessions
+                    .filter((s) => s.customer.status === 'active')
+                    .map((session) => (
+                      <Card
+                        key={session.id}
+                        className={cn(
+                          'p-4 cursor-pointer transition-colors hover:bg-accent/50',
+                          selectedSession === session.id && 'bg-accent shadow-sm'
+                        )}
+                        onClick={() => setSelectedSession(session.id)}
+                      >
+                        <div className="flex items-start gap-4">
+                          <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <span className="text-sm font-medium">
+                              {session.customer.name[0].toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="font-medium truncate">
+                                {session.customer.name}
+                              </div>
+                              <Badge 
+                                variant="outline" 
+                                className="font-normal whitespace-nowrap"
+                              >
+                                {session.customer.waitTime}
+                              </Badge>
+                            </div>
+                            <div className="text-sm text-muted-foreground truncate mt-1">
+                              {session.customer.lastMessage}
+                            </div>
                           </div>
                         </div>
-                        <Badge variant="outline">{session.customer.waitTime}</Badge>
-                      </div>
-                    </Card>
-                  ))}
+                      </Card>
+                    ))}
+                </div>
               </ScrollArea>
             </TabsContent>
 
-            <TabsContent value="waiting" className="m-0">
-              <ScrollArea className="h-[calc(100vh-12rem)]">
-                {sessions
-                  .filter((s) => s.customer.status === 'waiting')
-                  .map((session) => (
-                    <Card
-                      key={session.id}
-                      className={`p-4 mb-2 cursor-pointer hover:bg-accent/50 ${
-                        selectedSession === session.id ? 'bg-accent' : ''
-                      }`}
-                      onClick={() => setSelectedSession(session.id)}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <div className="font-medium">{session.customer.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {session.customer.lastMessage}
+            <TabsContent value="waiting" className="m-0 mt-4">
+              <ScrollArea className="h-[calc(100vh-14rem)]">
+                <div className="space-y-2 pr-4">
+                  {sessions
+                    .filter((s) => s.customer.status === 'waiting')
+                    .map((session) => (
+                      <Card
+                        key={session.id}
+                        className={cn(
+                          'p-4 cursor-pointer transition-colors hover:bg-accent/50',
+                          selectedSession === session.id && 'bg-accent shadow-sm'
+                        )}
+                        onClick={() => setSelectedSession(session.id)}
+                      >
+                        <div className="flex items-start gap-4">
+                          <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <span className="text-sm font-medium">
+                              {session.customer.name[0].toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="font-medium truncate">
+                                {session.customer.name}
+                              </div>
+                              <Badge 
+                                variant="secondary"
+                                className="font-normal whitespace-nowrap"
+                              >
+                                {session.customer.waitTime}
+                              </Badge>
+                            </div>
+                            <div className="text-sm text-muted-foreground truncate mt-1">
+                              {session.customer.lastMessage}
+                            </div>
                           </div>
                         </div>
-                        <Badge>{session.customer.waitTime}</Badge>
-                      </div>
-                    </Card>
-                  ))}
+                      </Card>
+                    ))}
+                </div>
               </ScrollArea>
             </TabsContent>
 
-            <TabsContent value="closed" className="m-0">
-              <div className="p-4 text-center text-muted-foreground">
-                No closed chats
+            <TabsContent value="closed" className="m-0 mt-4">
+              <div className="h-[calc(100vh-14rem)] flex items-center justify-center text-center">
+                <div className="space-y-2">
+                  <Archive className="h-8 w-8 text-muted-foreground mx-auto" />
+                  <p className="text-sm text-muted-foreground">No closed chats</p>
+                </div>
               </div>
             </TabsContent>
           </Tabs>
@@ -199,17 +240,24 @@ export function AgentWorkspace({ className }: AgentWorkspaceProps) {
       <div className="flex-1">
         {selectedSession ? (
           <ChatContainer
-            recipientId={selectedSession}
+            sessionId={selectedSession}
+            recipientId={
+              sessions.find((s) => s.id === selectedSession)?.customer.id || ''
+            }
             recipientName={
               sessions.find((s) => s.id === selectedSession)?.customer.name || ''
             }
           />
         ) : (
-          <div className="h-full flex items-center justify-center text-muted-foreground">
-            <div className="text-center">
-              <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <h3 className="text-lg font-medium mb-2">No chat selected</h3>
-              <p>Select a chat from the sidebar to start messaging</p>
+          <div className="h-full flex items-center justify-center">
+            <div className="text-center space-y-4">
+              <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto" />
+              <div className="space-y-2">
+                <h3 className="font-medium">No chat selected</h3>
+                <p className="text-sm text-muted-foreground max-w-sm">
+                  Select a chat from the sidebar to start messaging
+                </p>
+              </div>
             </div>
           </div>
         )}
@@ -217,42 +265,42 @@ export function AgentWorkspace({ className }: AgentWorkspaceProps) {
 
       {/* Customer Info Sidebar */}
       {selectedSession && (
-        <div className="w-64 border-l bg-muted/10">
-          <div className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Customer Info</h3>
-              <Button size="icon" variant="ghost">
+        <div className="w-80 border-l bg-card/50">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-semibold text-lg">Customer Info</h3>
+              <Button size="icon" variant="ghost" className="h-8 w-8">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </div>
 
             <div className="space-y-6">
               {/* Basic Info */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm">
-                  <User className="h-4 w-4" />
-                  <span>John Doe</span>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 text-sm">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <span>{sessions.find((s) => s.id === selectedSession)?.customer.name}</span>
                 </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Mail className="h-4 w-4" />
-                  <span>john@example.com</span>
+                <div className="flex items-center gap-3 text-sm">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  <span>{sessions.find((s) => s.id === selectedSession)?.customer.email}</span>
                 </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Phone className="h-4 w-4" />
-                  <span>+1 234 567 890</span>
+                <div className="flex items-center gap-3 text-sm">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <span>{sessions.find((s) => s.id === selectedSession)?.customer.phone || 'Not provided'}</span>
                 </div>
               </div>
 
               {/* Previous Interactions */}
               <div>
-                <h4 className="text-sm font-medium mb-2">Previous Chats</h4>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Calendar className="h-4 w-4" />
+                <h4 className="text-sm font-medium mb-3">Previous Chats</h4>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 text-sm">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
                     <span>Last chat: 2 days ago</span>
                   </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <MessageSquare className="h-4 w-4" />
+                  <div className="flex items-center gap-3 text-sm">
+                    <MessageSquare className="h-4 w-4 text-muted-foreground" />
                     <span>5 previous conversations</span>
                   </div>
                 </div>
@@ -260,13 +308,13 @@ export function AgentWorkspace({ className }: AgentWorkspaceProps) {
 
               {/* Tags */}
               <div>
-                <h4 className="text-sm font-medium mb-2">Tags</h4>
+                <h4 className="text-sm font-medium mb-3">Tags</h4>
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline" className="flex items-center gap-1">
+                  <Badge variant="outline" className="flex items-center gap-1.5">
                     <Tag className="h-3 w-3" />
                     VIP Customer
                   </Badge>
-                  <Badge variant="outline" className="flex items-center gap-1">
+                  <Badge variant="outline" className="flex items-center gap-1.5">
                     <Tag className="h-3 w-3" />
                     Technical Issue
                   </Badge>
@@ -275,12 +323,14 @@ export function AgentWorkspace({ className }: AgentWorkspaceProps) {
 
               {/* Quick Actions */}
               <div>
-                <h4 className="text-sm font-medium mb-2">Quick Actions</h4>
+                <h4 className="text-sm font-medium mb-3">Quick Actions</h4>
                 <div className="space-y-2">
-                  <Button variant="outline" size="sm" className="w-full">
+                  <Button variant="outline" size="sm" className="w-full justify-start font-normal">
+                    <History className="h-4 w-4 mr-2" />
                     View Order History
                   </Button>
-                  <Button variant="outline" size="sm" className="w-full">
+                  <Button variant="outline" size="sm" className="w-full justify-start font-normal">
+                    <TicketIcon className="h-4 w-4 mr-2" />
                     Create Ticket
                   </Button>
                 </div>

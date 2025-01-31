@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Calendar, Check, Filter, X } from 'lucide-react'
 import { format } from 'date-fns'
-import { TicketPriority, TicketStatus } from '@/types/tickets'
+import { TicketPriority, TicketStatus } from '@/types/features/tickets'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Calendar as CalendarComponent } from '@/components/ui/calendar'

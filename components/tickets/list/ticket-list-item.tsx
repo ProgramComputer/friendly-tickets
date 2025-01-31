@@ -2,7 +2,7 @@
 
 import { MessageSquare, MoreVertical } from 'lucide-react'
 import { format } from 'date-fns'
-import type { Ticket } from '@/types/tickets'
+import type { Ticket } from '@/types/features/tickets'
 import { cn } from '@/lib/utils'
 import { baseStyles } from '@/lib/constants/ui'
 import { PriorityIndicator } from '@/components/shared/priority-indicator'

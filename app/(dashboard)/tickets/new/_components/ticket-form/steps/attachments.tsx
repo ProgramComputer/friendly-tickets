@@ -6,7 +6,7 @@ import { X, Upload, File, Loader2 } from 'lucide-react'
 import { createBrowserClient } from '@supabase/ssr'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import type { Database } from '@/types/supabase'
+import type { Database } from '@/types/global/supabase'
 
 interface AttachmentsStepProps {
   register: any

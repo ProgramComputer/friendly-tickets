@@ -83,7 +83,7 @@ export default function SignUpPage() {
           const { error: customerError } = await supabase
             .from('customers')
             .insert({
-              user_id: data.user.id,
+              auth_user_id: data.user.id,
               email: values.email,
               name: values.email.split('@')[0], // Use email prefix as initial name
             })
@@ -100,7 +100,7 @@ export default function SignUpPage() {
           const { error: teamMemberError } = await supabase
             .from('team_members')
             .insert({
-              user_id: data.user.id,
+              auth_user_id: data.user.id,
               email: values.email,
               name: values.email.split('@')[0], // Use email prefix as initial name
               role: role,

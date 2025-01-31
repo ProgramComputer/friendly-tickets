@@ -1,5 +1,6 @@
 import { AlertCircle, AlertTriangle, ArrowDown, ArrowUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { PriorityIndicatorProps } from '@/types/shared/props'
 
 interface PriorityIndicatorProps {
   priority: 'low' | 'medium' | 'high' | 'urgent'

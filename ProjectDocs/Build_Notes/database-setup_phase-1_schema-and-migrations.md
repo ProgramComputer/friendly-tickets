@@ -18,7 +18,7 @@ Set up the initial database schema for the ticket system and establish proper mi
 1. Schema Setup
    - [x] Create initial schema with core tables (customers, team_members, tickets, messages)
    - [x] Add proper constraints and indexes
-   - [x] Remove RLS temporarily for development
+   - [x] Remove RLS TODO Temporarily for development
 
 2. Migration Management
    - [x] Create new migration for removing RLS

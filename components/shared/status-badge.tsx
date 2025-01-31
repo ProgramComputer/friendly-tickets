@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { StatusBadgeProps } from '@/types/shared/props'
 
 interface StatusBadgeProps {
   status: 'open' | 'in_progress' | 'waiting_on_customer' | 'resolved' | 'closed'

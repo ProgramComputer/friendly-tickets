@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from "@/lib/supabase/server"
-import { UserRole } from "@/types/auth"
+import { UserRole } from "@/types/shared/auth"
 import { ROUTES } from "@/lib/constants/routes"
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
@@ -39,7 +39,7 @@ export async function login(formData: FormData) {
       const { data: customer, error: customerError } = await supabase
         .from("customers")
         .select()
-        .eq("user_id", session.user.id)
+        .eq("auth_user_id", session.user.id)
         .single()
 
       if (customerError || !customer) {
@@ -54,7 +54,7 @@ export async function login(formData: FormData) {
       const { data: teamMember, error: teamMemberError } = await supabase
         .from("team_members")
         .select()
-        .eq("user_id", session.user.id)
+        .eq("auth_user_id", session.user.id)
         .eq("role", role)
         .single()
 
@@ -112,7 +112,7 @@ export async function signup(formData: FormData) {
         const { error: customerError } = await supabase
           .from('customers')
           .insert({
-            user_id: data.user.id,
+            auth_user_id: data.user.id,
             email: email,
             name: email.split('@')[0], // Use email prefix as initial name
           })
@@ -130,7 +130,7 @@ export async function signup(formData: FormData) {
         const { error: teamMemberError } = await supabase
           .from('team_members')
           .insert({
-            user_id: data.user.id,
+            auth_user_id: data.user.id,
             email: email,
             name: email.split('@')[0], // Use email prefix as initial name
             role: role,

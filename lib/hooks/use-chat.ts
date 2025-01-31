@@ -28,6 +28,12 @@ interface ChatSession {
   status: 'pending' | 'active' | 'ended' | 'transferred'
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function isValidUUID(uuid: string): boolean {
+  return UUID_REGEX.test(uuid)
+}
+
 export function useChat(sessionId: string) {
   const supabase = useSupabase()
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -38,67 +44,40 @@ export function useChat(sessionId: string) {
   const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({})
   const { toast } = useToast()
 
-  // Function to get relevant KB articles based on message
-  async function getRelevantKBArticles(message: string) {
-    try {
-      const { data: articles, error } = await supabase.rpc('match_kb_articles', {
-        query_embedding: message,
-        match_threshold: 0.7,
-        match_count: 3
-      })
+  // Fetch chat session details
+  useEffect(() => {
+    async function fetchChatSession() {
+      try {
+        const { data: session, error } = await supabase
+          .from('chat_sessions')
+          .select(`
+            *,
+            customer:customers!customer_id(*),
+            agent:team_members!agent_id(*)
+          `)
+          .eq('id', sessionId)
+          .single()
 
-      if (error) throw error
-      return articles
-    } catch (err) {
-      console.error('Error getting relevant articles:', err)
-      return []
-    }
-  }
+        if (error) {
+          console.error('Error fetching chat session:', error)
+          return
+        }
 
-  // Function to generate AI response
-  async function generateAIResponse(message: string) {
-    try {
-      // Get relevant KB articles for context
-      const relevantArticles = await getRelevantKBArticles(message)
-      const context = relevantArticles
-        .map(article => `${article.title}\n${article.content}`)
-        .join('\n\n')
-
-      // Call OpenAI endpoint
-      const response = await fetch('/api/chat/ai-response', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message,
-          context,
-          sessionId
-        })
-      })
-
-      if (!response.ok) throw new Error('Failed to generate AI response')
-      const { content } = await response.json()
-
-      // Send AI response as a message
-      const { error: msgError } = await supabase
-        .from('chat_messages')
-        .insert({
-          session_id: sessionId,
-          content,
-          sender_type: 'ai',
-          sender_id: 'ai-assistant'
+        console.log('Chat session details:', {
+          sessionId,
+          customerId: session?.customer_id,
+          agentId: session?.agent_id,
+          status: session?.status
         })
 
-      if (msgError) throw msgError
-
-    } catch (err) {
-      console.error('Error generating AI response:', err)
-      toast({
-        title: 'Error',
-        description: 'Failed to generate AI response. A human agent will assist you shortly.',
-        variant: 'destructive'
-      })
+        setChatSession(session)
+      } catch (err) {
+        console.error('Error in fetchChatSession:', err)
+      }
     }
-  }
+
+    fetchChatSession()
+  }, [sessionId, supabase])
 
   useEffect(() => {
     let mounted = true
@@ -145,11 +124,6 @@ export function useChat(sessionId: string) {
       }, (payload) => {
         const newMessage = payload.new as ChatMessage
         setMessages(current => [...current, newMessage])
-        
-        // Generate AI response for user messages
-        if (newMessage.sender_type === 'customer') {
-          generateAIResponse(newMessage.content)
-        }
       })
       .subscribe()
 
@@ -199,67 +173,85 @@ export function useChat(sessionId: string) {
     onPresence: handlePresence,
   })
 
-  const sendMessage = async (content: string) => {
+  const sendMessage = async (content: string, recipientId?: string) => {
+    console.log('[Chat Hook] Preparing to send message:', {
+      sessionId,
+      recipientId,
+      contentLength: content.length,
+      hasReferences: content.includes('@')
+    })
+
     try {
-      // Validate sessionId
-      if (!sessionId || typeof sessionId !== 'string' || sessionId.trim() === '') {
-        throw new Error('Invalid session ID')
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      console.log('[Chat Hook] Authenticated user:', {
+        id: user.id,
+        email: user.email
+      })
+
+      // Try to get team member first
+      const { data: teamMember } = await supabase
+        .from('team_members')
+        .select('id')
+        .eq('auth_user_id', user.id)
+        .single()
+
+      // If not a team member, try to get customer
+      if (!teamMember) {
+        const { data: customer } = await supabase
+          .from('customers')
+          .select('id')
+          .eq('auth_user_id', user.id)
+          .single()
+
+        if (!customer) {
+          throw new Error('User not found as team member or customer')
+        }
+
+        console.log('Customer lookup result:', { 
+          userId: user.id, 
+          customerId: customer?.id,
+          found: !!customer 
+        })
+      } else {
+        console.log('Team member lookup result:', {
+          userId: user.id,
+          teamMemberId: teamMember?.id,
+          found: !!teamMember
+        })
       }
 
-      setIsLoading(true)
-      setError(null)
-
-      // Log the full response for debugging
-      const response = await supabase
+      // Create message
+      const { data: message, error } = await supabase
         .from('chat_messages')
         .insert({
-          session_id: sessionId.trim(), // Ensure trimmed
-          content: content.trim(), // Trim content as well
-          sender_type: 'customer',
-          sender_id: supabase.session?.user?.id || '',
-          created_at: new Date().toISOString(),
-          is_internal: false
+          session_id: sessionId,
+          sender_id: user.id,
+          recipient_id: recipientId,
+          content,
+          status: 'sent',
+          sender_type: teamMember ? 'agent' : 'customer'
         })
         .select()
         .single()
 
-      const { data, error: supabaseError } = response
-
-      // If we have data, update messages immediately
-      if (data) {
-        setMessages(prev => [...prev, data as ChatMessage])
-        return // Exit early on success
-      }
-
-      // Handle error cases
-      if (supabaseError) {
-        // Handle UUID validation error specifically
-        if (supabaseError.code === '22P02') {
-          throw new Error('Invalid session format. Please check your session ID.')
-        }
-
-        // Handle other errors
-        if (Object.keys(supabaseError).length > 0 && supabaseError.code !== 'PGRST116') {
-          throw supabaseError
-        }
-      }
-
-    } catch (err) {
-      const error = err as Error
-      console.error('Error details:', {
-        message: error.message,
-        name: error.name,
-        stack: error.stack
+      console.log('[Chat Hook] Message created:', {
+        success: !!message,
+        error: error?.message,
+        messageId: message?.id
       })
-      
-      setError(error)
-      toast({
-        title: 'Error sending message',
-        description: error.message || 'Failed to send message. Please try again.',
-        variant: 'destructive'
-      })
-    } finally {
-      setIsLoading(false)
+
+      if (error) throw error
+
+      // Update local state
+      setMessages(prev => [...prev, message])
+
+      return message
+    } catch (error) {
+      console.error('[Chat Hook] Error sending message:', error)
+      throw error
     }
   }
 
@@ -316,23 +308,50 @@ export function useChat(sessionId: string) {
     try {
       setIsLoading(true)
 
-      const { error } = await supabase
+      // Get message details first to check for attachments
+      const { data: message, error: fetchError } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('id', messageId)
+        .eq('sender_id', supabase.session.user.id)
+        .single()
+
+      if (fetchError) throw fetchError
+
+      // If message has an attachment, delete it from storage
+      if (message?.attachment_url) {
+        const url = new URL(message.attachment_url)
+        const filePath = url.pathname.split('/').slice(-2).join('/')
+        
+        const { error: storageError } = await supabase.storage
+          .from('chat-attachments')
+          .remove([filePath])
+
+        if (storageError) {
+          console.error('Error deleting file:', storageError)
+          // Continue with message deletion even if file deletion fails
+        }
+      }
+
+      // Delete the message
+      const { error: deleteError } = await supabase
         .from('chat_messages')
         .delete()
         .eq('id', messageId)
         .eq('sender_id', supabase.session.user.id)
 
-      if (error) throw error
+      if (deleteError) throw deleteError
 
       setMessages((prev) => prev.filter((msg) => msg.id !== messageId))
     } catch (error) {
       console.error('Error deleting message:', error)
-      setIsLoading(false)
       toast({
         title: 'Error',
-        description: 'Failed to delete message. Please try again.',
+        description: error instanceof Error ? error.message : 'Failed to delete message',
         variant: 'destructive',
       })
+    } finally {
+      setIsLoading(false)
     }
   }
 

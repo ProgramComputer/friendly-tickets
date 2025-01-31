@@ -69,7 +69,7 @@ export default function NewTicketPage() {
     try {
       const ticket = await createTicket({
         ...data,
-        user_id: user.id,
+        auth_user_id: user.id,
         status: 'open'
       })
       toast({
