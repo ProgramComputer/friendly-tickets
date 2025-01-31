@@ -6,24 +6,30 @@ import { useSupabase } from '@/lib/supabase/client'
 import { VectorStoreRetriever } from '@langchain/core/vectorstores'
 import { useAuth } from '@/lib/hooks/use-auth'
 
-interface Message {
+export interface Message {
   id: string
   content: string
   role: 'user' | 'assistant'
   createdAt: Date
   command_data?: {
-    result: any
-    canRollback?: boolean
+    result: {
+      success: boolean
+      message: string
+      command_history_id?: number
+      ticket_id?: string
+      canRollback: boolean
+      error?: string
+    }
   }
 }
 
 interface CommandResult {
-  type: 'command' | 'rag'
-  result: string | {
-    message: string
-    success: boolean
-    canRollback?: boolean
-  }
+  success: boolean
+  message: string
+  command_history_id?: number
+  ticket_id?: string
+  canRollback: boolean
+  error?: string
 }
 
 interface UseAIChatProps {
@@ -117,7 +123,7 @@ export function useAIChat({ retriever }: UseAIChatProps) {
         body: JSON.stringify({
           input: content,
           retriever,
-          userRole: role // Add user role to the request
+          userRole: role
         }),
         signal: abortControllerRef.current.signal
       })
@@ -158,42 +164,52 @@ export function useAIChat({ retriever }: UseAIChatProps) {
 
   const rollbackCommand = async (messageId: string) => {
     const message = messages.find(m => m.id === messageId)
-    if (!message?.command_data?.result.transactionId) return
+    if (!message?.command_data?.result.command_history_id) {
+      console.error('No command history ID found for message:', messageId)
+      return
+    }
 
     try {
-      const { error } = await supabase.rpc('rollback_command_transaction', {
-        transaction_id: message.command_data.result.transactionId
+      // Call the revert_command function
+      const { data, error } = await supabase.rpc('revert_command', {
+        command_history_id: message.command_data.result.command_history_id
       })
 
       if (error) throw error
 
-      // Update message to show rollback status
-      setMessages(prev => prev.map(m => 
-        m.id === messageId
-          ? {
-              ...m,
-              command_data: {
-                ...m.command_data!,
-                result: {
-                  ...m.command_data!.result,
-                  canRollback: false,
-                  message: 'Command has been rolled back'
+      // Wait for the response before updating UI
+      const result = data as unknown as CommandResult
+      if (result.success) {
+        // Update message to show rollback status
+        setMessages(prev => prev.map(m => 
+          m.id === messageId
+            ? {
+                ...m,
+                command_data: {
+                  ...m.command_data!,
+                  result: {
+                    ...m.command_data!.result,
+                    canRollback: false,
+                    message: 'Command has been rolled back'
+                  }
                 }
               }
-            }
-          : m
-      ))
+            : m
+        ))
 
-      toast({
-        title: 'Success',
-        description: 'Command has been rolled back'
-      })
+        toast({
+          title: 'Success',
+          description: 'Command has been rolled back'
+        })
+      } else {
+        throw new Error(result.error || 'Failed to rollback command')
+      }
     } catch (error) {
       console.error('Error rolling back command:', error)
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Failed to rollback command'
+        description: error instanceof Error ? error.message : 'Failed to rollback command'
       })
     }
   }

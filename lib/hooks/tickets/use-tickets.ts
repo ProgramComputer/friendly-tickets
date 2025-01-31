@@ -19,6 +19,7 @@ import {
 import { createBrowserClient } from '@supabase/ssr'
 import { Database } from '@/types'
 import { useSupabase } from '@/lib/supabase/client'
+import { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 
 // Query keys
 export const ticketKeys = {
@@ -70,6 +71,8 @@ export function useTickets(params: TicketListParams) {
   
   // Set up real-time subscription
   useEffect(() => {
+    console.log('[Tickets] Setting up real-time subscription')
+    
     const channel = supabase
       .channel('tickets-changes')
       .on(
@@ -79,14 +82,36 @@ export function useTickets(params: TicketListParams) {
           schema: 'public',
           table: 'tickets'
         },
-        () => {
-          console.log('[Tickets] Real-time update received, invalidating query')
-          queryClient.invalidateQueries({ queryKey: ['tickets', params] })
+        (payload: RealtimePostgresChangesPayload<{
+          [key: string]: any
+        }>) => {
+          console.log('[Tickets] Real-time update received:', {
+            eventType: payload.eventType,
+            oldRecord: payload.old,
+            newRecord: payload.new,
+            timestamp: new Date().toISOString()
+          })
+          
+          // Invalidate all ticket-related queries to ensure UI updates
+          queryClient.invalidateQueries({ 
+            queryKey: ['tickets']
+          })
+          
+          // Also invalidate the specific ticket if it exists in the cache
+          const newRecord = payload.new as Ticket | undefined
+          if (newRecord?.id) {
+            queryClient.invalidateQueries({ 
+              queryKey: ['ticket', newRecord.id]
+            })
+          }
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log('[Tickets] Subscription status:', status)
+      })
 
     return () => {
+      console.log('[Tickets] Cleaning up subscription')
       channel.unsubscribe()
     }
   }, [supabase, queryClient, params])
@@ -94,95 +119,14 @@ export function useTickets(params: TicketListParams) {
   return useInfiniteQuery({
     queryKey: ['tickets', params],
     queryFn: async ({ pageParam }) => {
-      console.log('[Tickets] Starting ticket fetch with params:', { pageParam, params })
-      
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser()
-      console.log('[Tickets] Current user:', { id: user?.id, email: user?.email })
-      if (!user) throw new Error('Not authenticated')
-
-      // Check if user is a team member (agent/admin)
-      const { data: teamMember, error: teamMemberError } = await supabase
-        .from('team_members')
-        .select('id, role, department_id')
-        .eq('auth_user_id', user.id)
-        .maybeSingle()
-        
-      console.log('[Tickets] Team member lookup:', { 
-        found: !!teamMember,
-        role: teamMember?.role,
-        departmentId: teamMember?.department_id,
-        error: teamMemberError?.message 
+      const response = await getTickets({
+        ...params,
+        cursor: pageParam,
       })
-
-      let query = supabase
-        .from('tickets')
-        .select(`
-          *,
-          customer:customers!customer_id(*),
-          assignee:team_members!assignee_id(*),
-          department:departments!department_id(*),
-          messages:ticket_messages(count)
-        `)
-
-      // Apply role-based filters
-      if (teamMember) {
-        console.log('[Tickets] Applying team member filters:', { role: teamMember.role })
-        if (teamMember.role === 'admin') {
-          console.log('[Tickets] Admin role - no filters applied')
-        } else if (teamMember.role === 'agent') {
-          console.log('[Tickets] Agent role - filtering by assignment and department:', {
-            agentId: teamMember.id,
-            departmentId: teamMember.department_id
-          })
-          query = query.or(`assignee_id.eq.${teamMember.id},and(department_id.eq.${teamMember.department_id},assignee_id.is.null)`)
-        }
-      } else {
-        // Get customer ID for customer role
-        const { data: customer, error: customerError } = await supabase
-          .from('customers')
-          .select('id')
-          .eq('auth_user_id', user.id)
-          .single()
-
-        console.log('[Tickets] Customer lookup:', { 
-          userId: user.id, 
-          customerId: customer?.id,
-          found: !!customer,
-          error: customerError?.message 
-        })
-
-        if (!customer) throw new Error('User has no valid role')
-        
-        console.log('[Tickets] Customer role - filtering by customer_id:', customer.id)
-        query = query.eq('customer_id', customer.id)
-      }
-
-      // Apply sorting
-      query = query.order(params.sort?.field || 'created_at', { 
-        ascending: params.sort?.direction === 'asc' 
-      })
-      .range(pageParam || 0, (pageParam || 0) + 9)
-
-      const { data, error } = await query
-
-      console.log('[Tickets] Query results:', { 
-        ticketsFound: data?.length ?? 0,
-        role: teamMember?.role || 'customer',
-        error: error?.message,
-        filters: params,
-        pageParam
-      })
-
-      if (error) throw error
-      
-      return {
-        tickets: data as Ticket[],
-        nextCursor: data.length === 10 ? pageParam + 10 : undefined
-      }
+      return response
     },
     getNextPageParam: (lastPage) => lastPage.nextCursor,
-    initialPageParam: 0
+    initialPageParam: undefined,
   })
 }
 
@@ -243,16 +187,19 @@ export function useUpdateTicket() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (updates: Partial<Ticket> & { id: string }) => {
+    mutationFn: async (updates: UpdateTicketInput & { id: string }) => {
       const { data, error } = await supabase
         .from('tickets')
-        .update(updates)
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString(),
+        } as Database['public']['Tables']['tickets']['Update'])
         .eq('id', updates.id)
         .select()
         .single()
 
       if (error) throw error
-      return data
+      return data as Ticket
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tickets'] })

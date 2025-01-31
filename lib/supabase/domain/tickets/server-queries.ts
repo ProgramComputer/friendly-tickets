@@ -169,12 +169,20 @@ export async function getUserRole(): Promise<string | null> {
 
 export async function updateTicketStatus(ticketId: string, status: TicketStatus): Promise<void> {
   const supabase = await createClient()
-  const { error } = await supabase
+  console.log('[Ticket Status Update] Attempting update:', { ticketId, status })
+  
+  const { data, error } = await supabase
     .from('tickets')
     .update({ status })
     .eq('id', ticketId)
+    .select()
+  
+  console.log('[Ticket Status Update] Response:', { data, error })
 
-  if (error) throw error
+  if (error) {
+    console.error('[Ticket Status Update] Error:', error)
+    throw error
+  }
 }
 
 export async function updateTicketPriority(ticketId: string, priority: TicketPriority): Promise<void> {

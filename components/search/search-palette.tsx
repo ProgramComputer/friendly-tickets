@@ -194,10 +194,11 @@ export function SearchPalette({
               query = query.eq('customer_id', customer.id)
             }
             
-            // Add search term filter
-            if (searchTerm) {
+            // Add search term filter only if term exists
+            if (searchTerm.trim()) {
               query = query.ilike('title', `%${searchTerm}%`)
             }
+            // If no search term, it will return all tickets (filtered by role)
             break
 
           case 'agent':
@@ -462,6 +463,7 @@ export function SearchPalette({
       console.log('[Search Palette] Setting selected type:', object)
       setSelectedType(object)
       onSearchChange('') // Clear search term for second phase
+      setSearchResults([]) // Clear previous results
       return // Don't close palette yet
     }
     
@@ -470,6 +472,11 @@ export function SearchPalette({
       id: instance.id,
       display: instance.display
     })
+    
+    // Reset state
+    setSelectedType(null)
+    setSearchResults([])
+    onSearchChange('')
     onClose()
   }
 

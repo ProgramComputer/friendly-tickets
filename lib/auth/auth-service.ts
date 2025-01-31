@@ -78,12 +78,18 @@ async function signIn({ email, password }: {
 }
 
 async function signOut(): Promise<AuthResult> {
+  console.log('[Auth Service] Starting sign out process')
   try {
     const supabase = await createClient()
     const { error } = await supabase.auth.signOut()
-    if (error) throw error
+    if (error) {
+      console.error('[Auth Service] Sign out error:', error)
+      throw error
+    }
+    console.log('[Auth Service] Sign out successful, redirecting to login')
     return { success: true, redirectTo: ROUTES.auth.login }
   } catch (error) {
+    console.error('[Auth Service] Sign out failed:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : "An error occurred during sign out"

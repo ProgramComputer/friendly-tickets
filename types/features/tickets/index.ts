@@ -25,6 +25,32 @@ export interface TicketTagRelation extends DbTicketTagRelation {}
 // Enums
 export type TicketPriority = Database["public"]["Enums"]["ticket_priority"]
 
+// List Types
+export interface TicketListParams {
+  cursor?: string;
+  limit: number;
+  filters?: {
+    status?: TicketStatus[];
+    priority?: TicketPriority[];
+    dateRange?: {
+      start: Date;
+      end: Date;
+    };
+    search?: string;
+    tags?: string[];
+  };
+  sort?: {
+    field: 'created_at' | 'updated_at' | 'priority' | 'status';
+    direction: 'asc' | 'desc';
+  };
+}
+
+export interface TicketListResponse {
+  tickets: Ticket[];
+  nextCursor?: string;
+  total: number;
+}
+
 // Input Types
 export interface CreateTicketInput {
   title: string;

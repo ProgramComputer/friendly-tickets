@@ -85,7 +85,6 @@ export type Database = {
           attachment_name: string | null
           attachment_type: string | null
           attachment_url: string | null
-          command_data: Json | null
           content: string
           created_at: string
           id: string
@@ -100,7 +99,6 @@ export type Database = {
           attachment_name?: string | null
           attachment_type?: string | null
           attachment_url?: string | null
-          command_data?: Json | null
           content: string
           created_at?: string
           id?: string
@@ -115,7 +113,6 @@ export type Database = {
           attachment_name?: string | null
           attachment_type?: string | null
           attachment_url?: string | null
-          command_data?: Json | null
           content?: string
           created_at?: string
           id?: string
@@ -288,6 +285,50 @@ export type Database = {
           widget_position?: string
         }
         Relationships: []
+      }
+      command_history: {
+        Row: {
+          command_type: string
+          executed_at: string
+          executed_by: string
+          id: number
+          new_state: Json
+          previous_state: Json
+          reverted_at: string | null
+          reverted_by: string | null
+          ticket_id: string
+        }
+        Insert: {
+          command_type: string
+          executed_at?: string
+          executed_by: string
+          id?: never
+          new_state: Json
+          previous_state: Json
+          reverted_at?: string | null
+          reverted_by?: string | null
+          ticket_id: string
+        }
+        Update: {
+          command_type?: string
+          executed_at?: string
+          executed_by?: string
+          id?: never
+          new_state?: Json
+          previous_state?: Json
+          reverted_at?: string | null
+          reverted_by?: string | null
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "command_history_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       config: {
         Row: {
@@ -1023,6 +1064,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      assign_ticket: {
+        Args: {
+          ticket_id: string
+          agent_id: string
+        }
+        Returns: Json
+      }
       begin_command_transaction: {
         Args: {
           command_text: string
@@ -1044,6 +1092,10 @@ export type Database = {
             }
             Returns: unknown
           }
+      check_transaction_settings: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       check_user_is_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean
@@ -1061,6 +1113,19 @@ export type Database = {
           cascade?: boolean
         }
         Returns: undefined
+      }
+      execute_sql_internal: {
+        Args: {
+          sql: string
+        }
+        Returns: undefined
+      }
+      execute_ticket_command: {
+        Args: {
+          command_type: Database["public"]["Enums"]["ticket_command_type"]
+          params: Database["public"]["CompositeTypes"]["ticket_command_params"]
+        }
+        Returns: Json
       }
       halfvec_avg: {
         Args: {
@@ -1214,11 +1279,11 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
-      rollback_command_transaction: {
+      revert_command: {
         Args: {
-          transaction_id: string
+          command_id: number
         }
-        Returns: boolean
+        Returns: Json
       }
       sparsevec_out: {
         Args: {
@@ -1243,6 +1308,20 @@ export type Database = {
           table_names: string[]
         }
         Returns: undefined
+      }
+      update_ticket_priority: {
+        Args: {
+          ticket_id: string
+          new_priority: string
+        }
+        Returns: Json
+      }
+      update_ticket_status: {
+        Args: {
+          ticket_id: string
+          new_status: string
+        }
+        Returns: Json
       }
       validate_sender_id: {
         Args: {
@@ -1299,11 +1378,17 @@ export type Database = {
       command_status: "pending" | "executed" | "rolled_back"
       message_sender_type: "team_member" | "customer"
       team_member_role: "admin" | "agent"
+      ticket_command_type: "update_status" | "update_priority" | "assign_ticket"
       ticket_priority: "low" | "medium" | "high" | "urgent"
       ticket_status: "open" | "pending" | "resolved" | "closed"
     }
     CompositeTypes: {
-      [_ in never]: never
+      ticket_command_params: {
+        ticket_id: string | null
+        new_status: string | null
+        new_priority: string | null
+        agent_id: string | null
+      }
     }
   }
 }

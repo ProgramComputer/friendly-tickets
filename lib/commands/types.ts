@@ -1,96 +1,124 @@
-export type CommandRole = 'customer' | 'agent' | 'admin'
+export type CommandRole = 'admin' | 'agent' | 'customer'
 
-export type CommandObjectType = 'ticket' | 'agent' | 'customer' | 'team' | 'message' | 'template'
-
-export interface TaggedObject {
-  type: CommandObjectType
-  id: string
-  reference: string // e.g., "@ticket/123"
-  displayName?: string
-}
+export type CommandType = 'update_status' | 'update_priority' | 'assign_ticket'
 
 export interface ParsedCommand {
-  action: string
-  targets: TaggedObject[]
-  parameters: Record<string, any>
-  rawText: string
-  generatedSql?: string
+  type: CommandType
+  ticketId: string
+  params: {
+    status?: string
+    priority?: string
+    assignedTo?: string
+  }
 }
 
 export interface CommandResult {
   success: boolean
   message: string
-  data?: any
-  error?: any
-  canRollback: boolean
-  transactionId?: string
+  error?: string
+  ticket_id: string
+  command_history_id?: number  // Added for rollback support
 }
 
-// Role-based command permissions
-export const ROLE_COMMANDS: Record<CommandRole, string[]> = {
-  customer: ['view', 'update_priority', 'add_note'],
-  agent: ['view', 'update_priority', 'add_note', 'reassign', 'link', 'close', 'update_status'],
-  admin: ['view', 'update_priority', 'add_note', 'reassign', 'link', 'close', 'configure', 'report', 'manage', 'update_status']
+export interface CommandHistory {
+  id: number
+  ticket_id: string
+  command_type: CommandType
+  previous_state: {
+    status?: string
+    priority?: string
+    assigned_to?: string
+  }
+  new_state: {
+    status?: string
+    priority?: string
+    assigned_to?: string
+  }
+  executed_by: string
+  executed_at: Date
+  reverted_at?: Date
+  reverted_by?: string
 }
 
-// Command verbs and their aliases
-export const COMMAND_VERBS = {
-  view: ['show', 'display', 'get', 'find'],
-  update_status: ['set status', 'change status', 'update status'],
-  update_priority: ['set priority', 'change priority', 'update priority'],
-  add_note: ['note', 'comment', 'annotate'],
-  reassign: ['assign', 'transfer', 'move'],
-  link: ['connect', 'attach', 'associate'],
-  close: ['resolve', 'complete', 'finish'],
-  configure: ['setup', 'set', 'config'],
-  report: ['analyze', 'summarize', 'report on'],
-  manage: ['admin', 'manage', 'control']
-} as const
+// Map of roles to allowed commands
+export const ROLE_COMMANDS: Record<CommandRole, CommandType[]> = {
+  admin: ['update_status', 'update_priority', 'assign_ticket'],
+  agent: ['update_status', 'update_priority', 'assign_ticket'],
+  customer: ['update_status']
+}
 
-// Command object types and their validation rules
-export const OBJECT_TYPES: Record<CommandObjectType, {
-  table: string
-  displayField: string
-  allowedRoles: CommandRole[]
-  validateAccess?: (userId: string, objectId: string) => Promise<boolean>
-}> = {
-  ticket: {
-    table: 'tickets',
-    displayField: 'title',
-    allowedRoles: ['customer', 'agent', 'admin'],
-    validateAccess: async (userId, ticketId) => {
-      // Customers can only access their own tickets
-      // Agents and admins can access all tickets
-      return true // TODO: Implement actual validation
+// Command function definitions for OpenAI
+export const COMMAND_FUNCTIONS = [
+  {
+    name: 'update_ticket_status',
+    description: 'Update the status of a ticket',
+    parameters: {
+      type: 'object',
+      properties: {
+        ticketId: {
+          type: 'string',
+          description: 'The ID of the ticket to update'
+        },
+        status: {
+          type: 'string',
+          enum: ['open', 'pending', 'resolved', 'closed'],
+          description: 'The new status for the ticket'
+        }
+      },
+      required: ['ticketId', 'status']
     }
   },
-  agent: {
-    table: 'team_members',
-    displayField: 'name',
-    allowedRoles: ['agent', 'admin']
-  },
-  customer: {
-    table: 'customers',
-    displayField: 'name',
-    allowedRoles: ['agent', 'admin']
-  },
-  team: {
-    table: 'teams',
-    displayField: 'name',
-    allowedRoles: ['admin']
-  },
-  message: {
-    table: 'chat_messages',
-    displayField: 'content',
-    allowedRoles: ['customer', 'agent', 'admin'],
-    validateAccess: async (userId, messageId) => {
-      // Users can only access messages from their conversations
-      return true // TODO: Implement actual validation
+  {
+    name: 'update_ticket_priority',
+    description: 'Update the priority of a ticket',
+    parameters: {
+      type: 'object',
+      properties: {
+        ticketId: {
+          type: 'string',
+          description: 'The ID of the ticket to update'
+        },
+        priority: {
+          type: 'string',
+          enum: ['low', 'medium', 'high', 'urgent'],
+          description: 'The new priority for the ticket'
+        }
+      },
+      required: ['ticketId', 'priority']
     }
   },
-  template: {
-    table: 'chat_quick_responses',
-    displayField: 'title',
-    allowedRoles: ['agent', 'admin']
+  {
+    name: 'assign_ticket',
+    description: 'Assign a ticket to an agent',
+    parameters: {
+      type: 'object',
+      properties: {
+        ticketId: {
+          type: 'string',
+          description: 'The ID of the ticket to update'
+        },
+        agentId: {
+          type: 'string',
+          description: 'The ID of the agent to assign the ticket to'
+        }
+      },
+      required: ['ticketId', 'agentId']
+    }
+  }
+]
+
+// Rollback function definition
+export const ROLLBACK_FUNCTION = {
+  name: 'rollback_command',
+  description: 'Rollback a previous command',
+  parameters: {
+    type: 'object',
+    properties: {
+      commandId: {
+        type: 'string',
+        description: 'The ID of the command to rollback'
+      }
+    },
+    required: ['commandId']
   }
 } 

@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { ROUTES } from '@/lib/constants/routes'
 import { authClient } from '@/lib/auth/auth-client'
+import { toast } from 'sonner'
 
 interface User {
   email: string
@@ -24,6 +25,7 @@ interface User {
 export function UserNav() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
+  const [isSigningOut, setIsSigningOut] = useState(false)
 
   useEffect(() => {
     async function loadUser() {
@@ -39,9 +41,42 @@ export function UserNav() {
   }, [])
 
   const handleSignOut = async () => {
-    const { success } = await authClient.signOut()
-    if (success) {
-      router.push(ROUTES.auth.login)
+    if (isSigningOut) return // Prevent multiple clicks
+    
+    setIsSigningOut(true)
+    console.log('[UserNav] User initiated sign out')
+    
+    try {
+      const { success, error, localDataCleared, isTimeout } = await authClient.signOut()
+      
+      if (success) {
+        if (isTimeout) {
+          console.log('[UserNav] Sign out timed out but local data was cleared')
+          toast.success('Signed out locally. Some remote data may persist.')
+        } else {
+          console.log('[UserNav] Sign out successful')
+          toast.success('Signed out successfully')
+        }
+        
+        // If we cleared local data, always redirect to login
+        if (localDataCleared) {
+          router.push(ROUTES.auth.login)
+        }
+      } else {
+        console.error('[UserNav] Sign out failed:', error)
+        toast.error(error || 'Failed to sign out. Please try again.')
+        
+        // If error but local data was cleared, still redirect
+        if (localDataCleared) {
+          toast.message('Session data was cleared locally')
+          router.push(ROUTES.auth.login)
+        }
+      }
+    } catch (error) {
+      console.error('[UserNav] Sign out error:', error)
+      toast.error('An unexpected error occurred. Please try again.')
+    } finally {
+      setIsSigningOut(false)
     }
   }
 
@@ -80,8 +115,11 @@ export function UserNav() {
           <Link href={ROUTES.dashboard.settings}>Settings</Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleSignOut}>
-          Log out
+        <DropdownMenuItem 
+          onClick={handleSignOut}
+          disabled={isSigningOut}
+        >
+          {isSigningOut ? 'Signing out...' : 'Log out'}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

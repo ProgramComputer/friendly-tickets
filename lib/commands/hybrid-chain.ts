@@ -1,6 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { ChatOpenAI } from '@langchain/openai'
-import { PromptTemplate } from '@langchain/core/prompts'
+import { PromptTemplate, ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from '@langchain/core/prompts'
 import { StringOutputParser } from '@langchain/core/output_parsers'
 import { RunnableSequence } from '@langchain/core/runnables'
 import { VectorStoreRetriever } from '@langchain/core/vectorstores'
@@ -9,6 +9,10 @@ import { formatDocumentsAsString } from 'langchain/util/document'
 import { LangChainCommandParser } from './langchain-parser'
 import { CommandRole, ParsedCommand, CommandResult, ROLE_COMMANDS, OBJECT_TYPES } from './types'
 import { OpenAIEmbeddings } from '@langchain/openai'
+import { BaseMessage } from '@langchain/core/messages'
+import { LLMChain } from 'langchain/chains'
+import { StructuredOutputParser } from 'langchain/output_parsers'
+import { z } from 'zod'
 
 interface HybridChainOptions {
   maxCommandAttempts?: number
@@ -17,38 +21,27 @@ interface HybridChainOptions {
   openAIApiKey: string
 }
 
-const COMMAND_CLASSIFIER_PROMPT = `You are a command classifier for a CRM system. Determine if the user's input should be treated as a command or a general question.
+// Define the system message template
+const systemTemplate = `You are a command classifier for a CRM system. Your role is to determine if user inputs should be treated as commands.
 
-Input: {input}
+A command is any input that:
+1. Uses @mentions (e.g., @ticket/123, @agent/456)
+2. Contains action verbs (update, change, assign, close, etc.)
+3. Has clear parameters (status, priority, etc.)
 
-Consider:
-1. Does it request a specific action? (e.g., update, assign, create)
-2. Does it reference specific objects? (e.g., tickets, agents, customers)
-3. Does it include parameters? (e.g., priority, status)
-4. Is it asking for information that would be in the knowledge base?
+Example command: "Change status of @ticket/123 to open"
+Example non-command: "What is the current status?"
 
-Return a JSON object with these exact fields:
-{
+Return a JSON object with this exact format:
+{{
   "isCommand": boolean,
-  "confidence": number between 0 and 1,
-  "reasoning": string explanation
-}
+  "confidence": number,
+  "reasoning": string
+}}
 
-Example responses:
-{
-  "isCommand": true,
-  "confidence": 0.95,
-  "reasoning": "Clear action (assign) with specific objects (ticket 123, agent John)"
-}
+Input to classify: {input}`
 
-{
-  "isCommand": false,
-  "confidence": 0.9,
-  "reasoning": "General knowledge question about best practices"
-}
-
-Return ONLY the JSON object, no additional text, quotes, or markdown formatting.`
-
+// Define the RAG prompt
 const RAG_PROMPT = `You are a helpful CRM assistant. Use the following context to answer the user's question.
 If you don't find the answer in the context, say so - do not make up information.
 
@@ -62,15 +55,46 @@ Question: {input}
 
 Answer in a clear, professional manner. If suggesting actions, format them as commands the user can run.`
 
+// Create the chat prompt template
+const CHAT_PROMPT = ChatPromptTemplate.fromMessages([
+  SystemMessagePromptTemplate.fromTemplate(systemTemplate),
+  HumanMessagePromptTemplate.fromTemplate('Input to classify: {input}')
+])
+
+interface Classification {
+  isCommand: boolean
+  confidence: number
+  reasoning: string
+}
+
+// Add new types for ticket commands
+export type TicketCommandType = 'update_status' | 'update_priority' | 'assign_ticket'
+
+export interface TicketCommandParams {
+  ticket_id: string
+  new_status?: string
+  new_priority?: string
+  agent_id?: string
+}
+
+export interface TicketCommandResult {
+  success: boolean
+  message: string
+  error?: string
+  ticket_id: string
+  [key: string]: any
+}
+
 export class HybridChain {
   private commandParser: LangChainCommandParser
   private model: ChatOpenAI
   private retriever: VectorStoreRetriever
   private options: Required<Omit<HybridChainOptions, 'openAIApiKey'>>
   private embeddings: OpenAIEmbeddings
-  private classifierChain: RunnableSequence
+  private classifier: RunnableSequence
+  private commandChain: LLMChain
   private ragChain: RunnableSequence
-  private requestTimeout: number = 30000 // 30 second timeout
+  private requestTimeout: number = 60000 // Increased to 60 seconds
 
   constructor(
     private supabase: SupabaseClient,
@@ -78,13 +102,28 @@ export class HybridChain {
     retriever: VectorStoreRetriever,
     options: HybridChainOptions
   ) {
+    if (!retriever) {
+      throw new Error('Retriever is required for HybridChain initialization')
+    }
+
+    console.log('[HybridChain] Initializing with config:', {
+      userRole,
+      hasRetriever: !!retriever,
+      options: {
+        maxCommandAttempts: options.maxCommandAttempts,
+        minCommandConfidence: options.minCommandConfidence,
+        maxContextDocs: options.maxContextDocs
+      }
+    })
+
     const { openAIApiKey, ...restOptions } = options
 
     this.commandParser = new LangChainCommandParser(supabase, userRole)
     this.model = new ChatOpenAI({ 
-      modelName: 'gpt-4-turbo-preview',
+      modelName: 'gpt-4-0125-preview',
       openAIApiKey,
-      timeout: this.requestTimeout
+      timeout: this.requestTimeout,
+      maxRetries: 3
     })
     this.retriever = retriever
     this.options = {
@@ -94,21 +133,62 @@ export class HybridChain {
     }
     this.embeddings = new OpenAIEmbeddings({
       openAIApiKey,
+      timeout: this.requestTimeout,
+      maxRetries: 3
+    })
+
+    console.log('[HybridChain] Initialized model:', {
+      modelName: this.model.modelName,
       timeout: this.requestTimeout
     })
 
-    // Initialize chains once
-    this.classifierChain = RunnableSequence.from([
-      PromptTemplate.fromTemplate(COMMAND_CLASSIFIER_PROMPT),
+    // Initialize chains with detailed logging
+    console.log('[HybridChain] Initializing chains')
+    
+    const parseJson = (output: string): Classification => {
+      console.log('[Classifier] Attempting to parse output:', output)
+      try {
+        const result = JSON.parse(output) as Classification
+        console.log('[Classifier] Successfully parsed result:', result)
+        return {
+          isCommand: !!result.isCommand,
+          confidence: Number(result.confidence) || 0,
+          reasoning: result.reasoning || 'No reasoning provided'
+        }
+      } catch (e) {
+        console.error('[Classifier] Parse error:', e)
+        console.log('[Classifier] Failed output:', output)
+        return {
+          isCommand: false,
+          confidence: 0,
+          reasoning: `Error: Failed to parse classification - ${e instanceof Error ? e.message : 'Unknown error'}`
+        }
+      }
+    }
+
+    // Create the classifier chain
+    this.classifier = RunnableSequence.from([
+      CHAT_PROMPT,
       this.model,
       new StringOutputParser(),
+      parseJson
     ])
 
+    // Create the RAG chain
     this.ragChain = RunnableSequence.from([
       PromptTemplate.fromTemplate(RAG_PROMPT),
       this.model,
       new StringOutputParser()
     ])
+
+    this.commandChain = new LLMChain({
+      llm: this.model,
+      prompt: PromptTemplate.fromTemplate(RAG_PROMPT),
+      outputParser: new StringOutputParser(),
+      verbose: true // Enable verbose logging
+    })
+
+    console.log('[HybridChain] Chains initialized')
 
     console.log('[HybridChain] Initialized with:', {
       userRole,
@@ -118,13 +198,23 @@ export class HybridChain {
   }
 
   private async withTimeout<T>(promise: Promise<T>, operation: string): Promise<T> {
-    const timeout = new Promise<never>((_, reject) => {
-      setTimeout(() => {
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      const id = setTimeout(() => {
+        clearTimeout(id)
         reject(new Error(`Operation ${operation} timed out after ${this.requestTimeout}ms`))
       }, this.requestTimeout)
     })
 
-    return Promise.race([promise, timeout])
+    try {
+      const result = await Promise.race([promise, timeoutPromise])
+      return result as T
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('timed out')) {
+        console.error(`[HybridChain] Timeout in ${operation}:`, error)
+        throw new Error(`The operation took too long to complete. Please try again with a simpler query.`)
+      }
+      throw error
+    }
   }
 
   private handleSystemQuery(input: string): string | null {
@@ -145,112 +235,147 @@ export class HybridChain {
 
   async process(input: string): Promise<{
     type: 'command' | 'rag'
-    result: CommandResult | string
+    result: TicketCommandResult | string
   }> {
+    console.log('[HybridChain] Processing input:', {
+      input: input.slice(0, 100),
+      userRole: this.userRole,
+      timestamp: new Date().toISOString()
+    })
+
     // First check for system queries
     const systemResponse = this.handleSystemQuery(input)
     if (systemResponse) {
+      console.log('[HybridChain] Handled as system query:', { response: systemResponse })
       return {
         type: 'rag',
         result: systemResponse
       }
     }
 
-    // Continue with existing classification and processing
+    // Continue with classification
     const classification = await this.classifyInput(input)
-    console.log('Input classification:', classification)
+    console.log('[HybridChain] Classification result:', {
+      isCommand: classification.isCommand,
+      confidence: classification.confidence,
+      reasoning: classification.reasoning,
+      meetsThreshold: classification.confidence >= this.options.minCommandConfidence
+    })
 
     if (classification.isCommand && classification.confidence >= this.options.minCommandConfidence) {
-      // Try command processing
       try {
         const command = await this.commandParser.parseCommand(input)
         if (command) {
-          // Validate command against user role
-          const allowedCommands = ROLE_COMMANDS[this.userRole]
-          if (!allowedCommands.includes(command.action)) {
-            console.log(`[HybridChain] Command ${command.action} not allowed for role ${this.userRole}`)
-            return {
-              type: 'rag',
-              result: `I apologize, but as a ${this.userRole} you don't have permission to ${command.action}. Here are the commands available to you: ${allowedCommands.join(', ')}`
+          const { data, error } = await this.supabase.rpc('execute_ticket_command', {
+            command_type: command.type as TicketCommandType,
+            params: {
+              ticket_id: command.ticketId,
+              new_status: command.params?.status,
+              new_priority: command.params?.priority,
+              agent_id: command.params?.assignedTo
             }
-          }
-
-          // Validate object access
-          const hasInvalidAccess = command.targets.some(target => {
-            const objectType = OBJECT_TYPES[target.type]
-            return !objectType.allowedRoles.includes(this.userRole)
           })
 
-          if (hasInvalidAccess) {
-            console.log(`[HybridChain] User role ${this.userRole} cannot access some targets`)
+          console.log('[HybridChain] Command execution details:', {
+            command_type: command.type,
+            params: {
+              ticket_id: command.ticketId,
+              new_status: command.params?.status,
+              new_priority: command.params?.priority,
+              agent_id: command.params?.assignedTo
+            },
+            response: { data, error }
+          })
+
+          if (error) {
+            console.error('[HybridChain] Command execution error:', error)
             return {
-              type: 'rag',
-              result: `I apologize, but as a ${this.userRole} you don't have permission to access some of the requested resources.`
+              type: 'command',
+              result: {
+                success: false,
+                message: 'Failed to execute command',
+                error: error.message,
+                ticket_id: command.ticketId
+              }
             }
           }
 
+          console.log('[HybridChain] Command executed successfully:', data)
           return {
             type: 'command',
-            result: await this.executeCommand(command)
+            result: data
           }
         }
       } catch (error) {
-        console.error('Command processing failed:', error)
+        console.error('[HybridChain] Command parsing error:', error)
+        return {
+          type: 'rag',
+          result: `I couldn't process that as a command. ${error instanceof Error ? error.message : 'Please try rephrasing.'}`
+        }
       }
     }
 
-    // Fall back to RAG if:
-    // 1. Not a command
-    // 2. Command processing failed
-    // 3. Low command confidence
-    return {
-      type: 'rag',
-      result: await this.generateRAGResponse(input)
+    // Handle as RAG query
+    try {
+      const docs = await this.withTimeout(
+        this.retriever.getRelevantDocuments(input),
+        'retrieve documents'
+      )
+
+      const limitedDocs = docs.slice(0, this.options.maxContextDocs)
+      const context = formatDocumentsAsString(limitedDocs)
+
+      const response = await this.withTimeout(
+        this.ragChain.invoke({
+          input,
+          context,
+          userRole: this.userRole,
+          availableCommands: ROLE_COMMANDS[this.userRole].join(', ')
+        }),
+        'generate response'
+      )
+
+      return {
+        type: 'rag',
+        result: response
+      }
+    } catch (error) {
+      console.error('[HybridChain] RAG processing error:', error)
+      throw error
     }
   }
 
-  private async classifyInput(input: string) {
+  private async classifyInput(input: string): Promise<Classification> {
+    console.log('[HybridChain] Starting classification:', {
+      inputLength: input.length,
+      inputPreview: input.slice(0, 100),
+      timestamp: new Date().toISOString()
+    })
+
     try {
-      console.log('[HybridChain] Classifying input:', input.slice(0, 50))
-      
       const result = await this.withTimeout(
-        this.classifierChain.invoke({ input }),
+        this.classifier.invoke({ input }),
         'classifyInput'
       )
       
-      // Clean the result string to ensure it's valid JSON
-      const cleanResult = result.trim().replace(/^```json\n|\n```$/g, '').trim()
+      console.log('[HybridChain] Classification complete:', {
+        result,
+        timestamp: new Date().toISOString()
+      })
       
-      try {
-        const parsed = JSON.parse(cleanResult)
-        
-        // Validate the required fields
-        if (typeof parsed.isCommand !== 'boolean' || 
-            typeof parsed.confidence !== 'number' || 
-            typeof parsed.reasoning !== 'string') {
-          console.error('[HybridChain] Invalid classifier response format:', parsed)
-          return {
-            isCommand: false,
-            confidence: 0,
-            reasoning: 'Error: Invalid response format'
-          }
-        }
-        
-        return parsed
-      } catch (parseError) {
-        console.error('[HybridChain] Failed to parse classifier response:', cleanResult, parseError)
-        return {
-          isCommand: false,
-          confidence: 0,
-          reasoning: 'Error: Failed to parse response'
-        }
-      }
+      return result as Classification
     } catch (error) {
-      console.error('[HybridChain] Classifier chain error:', error)
+      console.error('[HybridChain] Classification failed:', {
+        error,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        errorStack: error instanceof Error ? error.stack : undefined,
+        timestamp: new Date().toISOString()
+      })
+      
       return {
         isCommand: false,
         confidence: 0,
-        reasoning: 'Error: Classification failed'
+        reasoning: `Error: ${error instanceof Error ? error.message : 'Classification failed'}`
       }
     }
   }
@@ -355,8 +480,8 @@ export class HybridChain {
       // Generate response using RAG prompt
       return this.withTimeout(
         this.ragChain.invoke({
-          context: combinedContext,
           input,
+          context: combinedContext,
           userRole: this.userRole,
           availableCommands: ROLE_COMMANDS[this.userRole].join(', ')
         }),
