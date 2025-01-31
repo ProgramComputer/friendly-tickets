@@ -129,7 +129,7 @@ export function SearchPalette({
       return
     }
 
-    const delayedSearch = setTimeout(async () => {
+    const doSearch = async () => {
       setIsLoading(true)
       console.log('[Search Palette] Executing search for:', {
         type: selectedType.id,
@@ -140,35 +140,75 @@ export function SearchPalette({
 
       try {
         // Get the current user
-        const { data: { user } } = await supabase.auth.getUser()
+        console.log('[Search Palette] Attempting to get user')
+        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        
+        if (userError) {
+          console.error('[Search Palette] Failed to get user:', {
+            error: userError,
+            timestamp: new Date().toISOString()
+          })
+          return
+        }
+        
         if (!user) {
-          console.error('[Search Palette] No authenticated user')
+          console.error('[Search Palette] No authenticated user found', {
+            timestamp: new Date().toISOString()
+          })
           return
         }
 
+        console.log('[Search Palette] Got user:', {
+          userId: user.id,
+          timestamp: new Date().toISOString()
+        })
+
         // Try to get team member first
-        const { data: teamMember } = await supabase
+        console.log('[Search Palette] Checking team member status')
+        const { data: teamMember, error: teamError } = await supabase
           .from('team_members')
           .select('id, role')
           .eq('auth_user_id', user.id)
           .single()
 
+        if (teamError) {
+          console.error('[Search Palette] Error checking team member:', {
+            error: teamError,
+            userId: user.id,
+            timestamp: new Date().toISOString()
+          })
+        }
+
         // If not a team member, try to get customer
-        const { data: customer } = await supabase
+        console.log('[Search Palette] Checking customer status')
+        const { data: customer, error: customerError } = await supabase
           .from('customers')
           .select('id')
           .eq('auth_user_id', user.id)
           .single()
 
+        if (customerError) {
+          console.error('[Search Palette] Error checking customer:', {
+            error: customerError,
+            userId: user.id,
+            timestamp: new Date().toISOString()
+          })
+        }
+
         if (!teamMember && !customer) {
-          console.error('[Search Palette] User not found in system')
+          console.error('[Search Palette] User not found in system:', {
+            userId: user.id,
+            timestamp: new Date().toISOString()
+          })
           return
         }
 
-        console.log('[Search Palette] User role check:', {
+        console.log('[Search Palette] Role check complete:', {
           isTeamMember: !!teamMember,
+          teamRole: teamMember?.role,
           isCustomer: !!customer,
-          role: teamMember?.role || 'customer'
+          userId: user.id,
+          timestamp: new Date().toISOString()
         })
 
         // Build the query based on the object type
@@ -252,6 +292,16 @@ export function SearchPalette({
 
         const { data, error } = await query
 
+        console.log('[Search Palette] Query execution completed:', {
+          success: !error,
+          hasData: !!data,
+          dataLength: data?.length,
+          error: error?.message,
+          selectedType: selectedType?.id,
+          searchTerm,
+          timestamp: new Date().toISOString()
+        })
+
         console.log('[Search Palette] Raw search results:', {
           success: !!data,
           count: data?.length,
@@ -307,9 +357,9 @@ export function SearchPalette({
       } finally {
         setIsLoading(false)
       }
-    }, 300)
+    }
 
-    return () => clearTimeout(delayedSearch)
+    doSearch()
   }, [searchTerm, selectedType, supabase])
 
   // Reset active index when search results change
