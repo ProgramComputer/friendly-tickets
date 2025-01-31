@@ -433,6 +433,12 @@ export function FloatingChatWidget() {
                             <div className="text-xs text-muted-foreground">
                               Command Result:
                             </div>
+                            {console.log('[AI Chat Widget] Command Data:', {
+                              messageId: message.id,
+                              commandData: message.command_data,
+                              canRollback: message.command_data.result.canRollback,
+                              timestamp: new Date().toISOString()
+                            })}
                             <div className="mt-1">
                               {typeof message.command_data.result === 'string' 
                                 ? message.command_data.result

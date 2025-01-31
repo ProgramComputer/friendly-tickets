@@ -71,10 +71,13 @@ export function useTickets(params: TicketListParams) {
   
   // Set up real-time subscription
   useEffect(() => {
-    console.log('[Tickets] Setting up real-time subscription')
+    console.log('[Tickets Subscription] Setting up with params:', {
+      params,
+      timestamp: new Date().toISOString()
+    })
     
     const channel = supabase
-      .channel('tickets-changes')
+      .channel(`tickets-changes-${params.status?.join('-')}`)
       .on(
         'postgres_changes',
         {
@@ -82,51 +85,81 @@ export function useTickets(params: TicketListParams) {
           schema: 'public',
           table: 'tickets'
         },
-        (payload: RealtimePostgresChangesPayload<{
-          [key: string]: any
-        }>) => {
-          console.log('[Tickets] Real-time update received:', {
+        (payload: RealtimePostgresChangesPayload<Database['public']['Tables']['tickets']['Row']>) => {
+          console.log('[Tickets Subscription] Update received:', {
             eventType: payload.eventType,
+            table: 'tickets',
             oldRecord: payload.old,
             newRecord: payload.new,
             timestamp: new Date().toISOString()
           })
           
-          // Invalidate all ticket-related queries to ensure UI updates
-          queryClient.invalidateQueries({ 
-            queryKey: ['tickets']
-          })
+          // If this is an update and status changed
+          if (payload.eventType === 'UPDATE' && payload.old?.status !== payload.new?.status) {
+            console.log('[Tickets Subscription] Status changed, invalidating all lists')
+            // Invalidate all ticket lists when status changes
+            queryClient.invalidateQueries({ 
+              queryKey: ticketKeys.lists(),
+              exact: false 
+            })
+          } else {
+            // For other changes, only invalidate the current list if the ticket belongs in it
+            const ticketStatus = payload.new?.status
+            if (ticketStatus && (!params.status || params.status.includes(ticketStatus))) {
+              console.log('[Tickets Subscription] Invalidating current list:', params.status)
+              queryClient.invalidateQueries({ 
+                queryKey: ticketKeys.list(params),
+                exact: true 
+              })
+            }
+          }
           
           // Also invalidate the specific ticket if it exists in the cache
-          const newRecord = payload.new as Ticket | undefined
-          if (newRecord?.id) {
+          if (payload.new?.id) {
+            console.log('[Tickets Subscription] Invalidating specific ticket:', {
+              ticketId: payload.new.id,
+              timestamp: new Date().toISOString()
+            })
             queryClient.invalidateQueries({ 
-              queryKey: ['ticket', newRecord.id]
+              queryKey: ticketKeys.detail(payload.new.id),
+              exact: true 
             })
           }
         }
       )
       .subscribe((status) => {
-        console.log('[Tickets] Subscription status:', status)
+        console.log('[Tickets Subscription] Status update:', {
+          status,
+          timestamp: new Date().toISOString()
+        })
+        
+        if (status === 'SUBSCRIBED') {
+          console.log('[Tickets Subscription] Successfully subscribed to changes')
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[Tickets Subscription] Channel error occurred')
+        }
       })
 
     return () => {
-      console.log('[Tickets] Cleaning up subscription')
+      console.log('[Tickets Subscription] Cleaning up subscription')
       channel.unsubscribe()
     }
-  }, [supabase, queryClient, params])
+  }, [supabase, queryClient, params.status?.join('-')])
 
-  return useInfiniteQuery({
-    queryKey: ['tickets', params],
-    queryFn: async ({ pageParam }) => {
-      const response = await getTickets({
-        ...params,
-        cursor: pageParam,
+  return useQuery({
+    queryKey: ticketKeys.list(params),
+    queryFn: async () => {
+      console.log('[Tickets Query] Fetching tickets:', {
+        params,
+        timestamp: new Date().toISOString()
       })
-      return response
+      const response = await getTickets(params)
+      console.log('[Tickets Query] Response received:', {
+        ticketCount: response.tickets.length,
+        timestamp: new Date().toISOString()
+      })
+      return response.tickets
     },
-    getNextPageParam: (lastPage) => lastPage.nextCursor,
-    initialPageParam: undefined,
   })
 }
 

@@ -2,12 +2,12 @@
 
 import { Card } from "@/components/ui/card"
 import { createBrowserClient } from "@supabase/ssr"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { ChatContainer } from "@/components/chat/chat-container"
 import { QuickResponses } from "@/components/chat/quick-responses"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { TicketList } from "@/components/tickets/list/ticket-list"
 import { TicketDetail } from "@/components/tickets/ticket-detail"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -19,11 +19,35 @@ export default function AgentWorkspace() {
   const [selectedView, setSelectedView] = useState<"tickets" | "chat">("tickets")
   const [selectedItem, setSelectedItem] = useState<string | null>(null)
   const retriever = useVectorStore()
+  const queryClient = useQueryClient()
   
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
+
+  // Set up real-time subscription for stats
+  useEffect(() => {
+    const channel = supabase
+      .channel('stats-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tickets'
+        },
+        () => {
+          // Invalidate stats when any ticket changes
+          queryClient.invalidateQueries({ queryKey: ['agentStats'] })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      channel.unsubscribe()
+    }
+  }, [supabase, queryClient])
 
   const { data: stats, isLoading } = useQuery<AgentStats>({
     queryKey: ["agentStats"],
@@ -77,7 +101,9 @@ export default function AgentWorkspace() {
         <Tabs defaultValue="tickets" className="flex-1">
           <div className="border-b p-2">
             <TabsList className="w-full">
-              <TabsTrigger value="tickets" className="flex-1">Tickets ({stats?.openTickets})</TabsTrigger>
+              <TabsTrigger value="tickets" className="flex-1">
+                Tickets ({(stats?.openTickets || 0) + (stats?.inProgressTickets || 0) + (stats?.resolvedTickets || 0)})
+              </TabsTrigger>
               <TabsTrigger value="chats" className="flex-1">Chats</TabsTrigger>
             </TabsList>
           </div>

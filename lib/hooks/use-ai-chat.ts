@@ -172,7 +172,7 @@ export function useAIChat({ retriever }: UseAIChatProps) {
     try {
       // Call the revert_command function
       const { data, error } = await supabase.rpc('revert_command', {
-        command_history_id: message.command_data.result.command_history_id
+        command_id: message.command_data.result.command_history_id
       })
 
       if (error) throw error

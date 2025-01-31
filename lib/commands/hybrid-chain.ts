@@ -303,7 +303,11 @@ export class HybridChain {
           console.log('[HybridChain] Command executed successfully:', data)
           return {
             type: 'command',
-            result: data
+            result: {
+              ...data,
+              canRollback: true,
+              command_history_id: data.command_history_id
+            }
           }
         }
       } catch (error) {
