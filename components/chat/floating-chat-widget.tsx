@@ -308,9 +308,16 @@ export function FloatingChatWidget() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement> | React.KeyboardEvent<HTMLTextAreaElement>) => {
     e.preventDefault()
-    if (!input.trim() || isLoading || !role || isSearchOpen) return // Don't submit if search is open
+    if (!input.trim() || isLoading || !role || isSearchOpen) return
+
+    // Store current states in case we need to restore them
+    const previousInput = input
+    const previousReferences = [...objectReferences]
 
     try {
+      // Close search palette first to prevent state conflicts
+      closeSearch()
+
       // Build input with proper object references
       let contextualInput = input
 
@@ -331,10 +338,9 @@ export function FloatingChatWidget() {
 
       await sendMessage(contextualInput)
       
-      // Reset all states after successful send
+      // Only clear input and references after successful send
       setInput('')
       setObjectReferences([])
-      closeSearch() // Close and reset search palette
       
       if (scrollRef.current) {
         requestAnimationFrame(() => {
@@ -345,6 +351,9 @@ export function FloatingChatWidget() {
       }
     } catch (error) {
       console.error('[AI Chat Widget] Error sending message:', error)
+      // Restore previous states if there was an error
+      setInput(previousInput)
+      setObjectReferences(previousReferences)
     }
   }
 
