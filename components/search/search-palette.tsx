@@ -144,7 +144,7 @@ export function SearchPalette({
         const { data: { user }, error: userError } = await supabase.auth.getUser()
         
         if (userError) {
-          console.error('[Search Palette] Failed to get user:', {
+          console.log('[Search Palette] Failed to get user:', {
             error: userError,
             timestamp: new Date().toISOString()
           })
@@ -152,7 +152,7 @@ export function SearchPalette({
         }
         
         if (!user) {
-          console.error('[Search Palette] No authenticated user found', {
+          console.log('[Search Palette] No authenticated user found', {
             timestamp: new Date().toISOString()
           })
           return
@@ -172,7 +172,7 @@ export function SearchPalette({
           .single()
 
         if (teamError) {
-          console.error('[Search Palette] Error checking team member:', {
+          console.log('[Search Palette] Error checking team member:', {
             error: teamError,
             userId: user.id,
             timestamp: new Date().toISOString()
@@ -188,7 +188,7 @@ export function SearchPalette({
           .single()
 
         if (customerError) {
-          console.error('[Search Palette] Error checking customer:', {
+          console.log('[Search Palette] Error checking customer:', {
             error: customerError,
             userId: user.id,
             timestamp: new Date().toISOString()
@@ -196,7 +196,7 @@ export function SearchPalette({
         }
 
         if (!teamMember && !customer) {
-          console.error('[Search Palette] User not found in system:', {
+          console.log('[Search Palette] User not found in system:', {
             userId: user.id,
             timestamp: new Date().toISOString()
           })
@@ -310,7 +310,7 @@ export function SearchPalette({
         })
 
         if (error) {
-          console.error('[Search Palette] Search error:', error)
+          console.log('[Search Palette] Search error:', error)
           setSearchResults([])
           return
         }
@@ -352,7 +352,7 @@ export function SearchPalette({
         console.log('[Search Palette] Setting formatted results:', formattedResults)
         setSearchResults(formattedResults)
       } catch (error) {
-        console.error('[Search Palette] Search error:', error)
+        console.log('[Search Palette] Search error:', error)
         setSearchResults([])
       } finally {
         setIsLoading(false)
