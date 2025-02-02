@@ -5,6 +5,7 @@ import { useToast } from '@/hooks/use-toast'
 import { useSupabase } from '@/lib/supabase/client'
 import { VectorStoreRetriever } from '@langchain/core/vectorstores'
 import { useAuth } from '@/lib/hooks/use-auth'
+import { Session } from '@supabase/supabase-js'
 
 export interface Message {
   id: string
@@ -163,17 +164,50 @@ export function useAIChat({ retriever }: UseAIChatProps) {
   }
 
   const rollbackCommand = async (messageId: string) => {
+    console.log('[Debug] Starting rollback for message:', messageId);
+    
     const message = messages.find(m => m.id === messageId)
+    console.log('[Debug] Found message:', {
+      hasMessage: !!message,
+      commandData: message?.command_data,
+      historyId: message?.command_data?.result.command_history_id
+    });
+    
     if (!message?.command_data?.result.command_history_id) {
       console.error('No command history ID found for message:', messageId)
       return
     }
 
     try {
+      console.log('[Debug] About to get session');
+      // Get current session
+      let session: Session | null = null;
+      try {
+        const sessionResponse = await supabase.auth.getSession()
+        console.log('[Debug] Raw session response:', sessionResponse);
+        session = sessionResponse.data.session;
+        console.log('[Debug] Auth session:', {
+          hasSession: !!session,
+          user: session?.user?.email,
+          accessToken: !!session?.access_token
+        });
+      } catch (sessionError) {
+        console.error('[Debug] Error getting session:', sessionError);
+        throw sessionError;
+      }
+
+      if (!session?.access_token) {
+        throw new Error('No auth session found')
+      }
+
+      console.log('[Debug] Calling revert_command with ID:', message.command_data.result.command_history_id);
+      
       // Call the revert_command function
       const { data, error } = await supabase.rpc('revert_command', {
         command_id: message.command_data.result.command_history_id
       })
+
+      console.log('[Debug] Revert command response:', { data, error });
 
       if (error) throw error
 

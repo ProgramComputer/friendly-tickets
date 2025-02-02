@@ -11,7 +11,8 @@ import {
   Users,
   FileText,
   Building2,
-  MessagesSquare
+  MessagesSquare,
+  RotateCcw
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -308,16 +309,9 @@ export function FloatingChatWidget() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement> | React.KeyboardEvent<HTMLTextAreaElement>) => {
     e.preventDefault()
-    if (!input.trim() || isLoading || !role || isSearchOpen) return
-
-    // Store current states in case we need to restore them
-    const previousInput = input
-    const previousReferences = [...objectReferences]
+    if (!input.trim() || isLoading || !role || isSearchOpen) return // Don't submit if search is open
 
     try {
-      // Close search palette first to prevent state conflicts
-      closeSearch()
-
       // Build input with proper object references
       let contextualInput = input
 
@@ -338,9 +332,10 @@ export function FloatingChatWidget() {
 
       await sendMessage(contextualInput)
       
-      // Only clear input and references after successful send
+      // Reset all states after successful send
       setInput('')
       setObjectReferences([])
+      closeSearch() // Close and reset search palette
       
       if (scrollRef.current) {
         requestAnimationFrame(() => {
@@ -351,9 +346,6 @@ export function FloatingChatWidget() {
       }
     } catch (error) {
       console.error('[AI Chat Widget] Error sending message:', error)
-      // Restore previous states if there was an error
-      setInput(previousInput)
-      setObjectReferences(previousReferences)
     }
   }
 
@@ -442,11 +434,10 @@ export function FloatingChatWidget() {
                             <div className="text-xs text-muted-foreground">
                               Command Result:
                             </div>
-                            {console.log('[AI Chat Widget] Command Data:', {
+                            {console.log('[Debug] Command Data:', {
                               messageId: message.id,
-                              commandData: message.command_data,
                               canRollback: message.command_data.result.canRollback,
-                              timestamp: new Date().toISOString()
+                              commandData: message.command_data
                             })}
                             <div className="mt-1">
                               {typeof message.command_data.result === 'string' 
@@ -454,13 +445,17 @@ export function FloatingChatWidget() {
                                 : message.command_data.result.message
                               }
                             </div>
-                            {message.command_data.result.canRollback && (
+                            {message.command_data?.result?.canRollback && (
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 className="mt-2"
-                                onClick={() => rollbackCommand(message.id)}
+                                onClick={() => {
+                                  console.log('[Debug] Rollback clicked for message:', message.id);
+                                  rollbackCommand(message.id);
+                                }}
                               >
+                                <RotateCcw className="mr-2 h-4 w-4" />
                                 Undo Command
                               </Button>
                             )}

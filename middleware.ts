@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { ROUTES } from './lib/constants/routes'
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
+  let supabaseResponse = NextResponse.next({
     request: {
       headers: request.headers,
     },
@@ -14,46 +14,27 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value
+        getAll() {
+          return request.cookies.getAll()
         },
-        set(name: string, value: string, options: any) {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-          response = NextResponse.next({
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
+          supabaseResponse = NextResponse.next({
             request: {
               headers: request.headers,
             },
           })
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-        },
-        remove(name: string, options: any) {
-          request.cookies.delete({
-            name,
-            ...options,
-          })
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
-          response.cookies.delete({
-            name,
-            ...options,
-          })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          )
         },
       },
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   // Public routes that don't require authentication
   if (request.nextUrl.pathname.startsWith('/login') ||
@@ -63,7 +44,7 @@ export async function middleware(request: NextRequest) {
       request.nextUrl.pathname === '/' ||
       request.nextUrl.pathname.startsWith('/about') ||
       request.nextUrl.pathname.startsWith('/contact')) {
-    return response
+    return supabaseResponse
   }
 
   // Check if user is authenticated
@@ -76,7 +57,6 @@ export async function middleware(request: NextRequest) {
     .from('team_members')
     .select('role')
     .eq('auth_user_id', user.id)
-    
     .maybeSingle()
 
   const role = teamMember ? teamMember.role : 'customer'
@@ -93,7 +73,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL(ROUTES.role[role], request.url))
   }
 
-  return response
+  return supabaseResponse
 }
 
 export const config = {
