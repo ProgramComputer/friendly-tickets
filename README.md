@@ -1,69 +1,154 @@
-# Welcome to your Lovable project
+# AutoCRM - Customer Support & Ticketing Platform
 
-## Project info
+AutoCRM is a modern customer support system designed to manage tickets, facilitate real-time messaging, and streamline support workflows. Built with Next.js 15 and Supabase, it provides a comprehensive platform for customers, agents, and administrators.
 
-**URL**: https://lovable.dev/projects/cb629436-c7e5-4985-99e8-c66d44d080a3
+## 🚀 Key Features
 
-## How can I edit this code?
+- **Ticket Management**: Create, track, and resolve customer support tickets
+- **Real-time Messaging**: Chat between customers and support agents
+- **Role-based Access**: Separate interfaces for customers, agents, and admins
+- **Knowledge Base**: Resources to help customers find answers quickly
+- **Team Management**: Organize agents into departments and teams
+- **Performance Analytics**: Track support metrics and team performance
 
-There are several ways of editing your application.
+## 💻 Tech Stack
 
-**Use Lovable**
+- **Frontend**: Next.js 15 with App Router and React Server Components
+- **Styling**: Tailwind CSS with shadcn/ui components
+- **Database**: PostgreSQL (via Supabase)
+- **Authentication**: Supabase Auth
+- **State Management**: Zustand and React Query
+- **Realtime**: WebSockets / Supabase Realtime
+- **Testing**: Playwright for E2E, Jest for unit tests
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/cb629436-c7e5-4985-99e8-c66d44d080a3) and start prompting.
+## 🏗️ Project Structure
 
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```
+├── app/                  # Next.js App Router
+│   ├── (admin)/          # Admin-specific routes
+│   ├── (agent)/          # Agent-specific routes
+│   ├── (auth)/           # Authentication routes
+│   ├── (dashboard)/      # Customer dashboard routes
+│   ├── (marketing)/      # Public marketing pages
+│   ├── (public)/         # Public-facing routes
+│   ├── api/              # API routes
+│   └── _lib/             # Server-only code
+├── components/           # React components
+│   ├── shared/           # Shared UI components
+│   ├── features/         # Feature-specific components
+│   └── ui/               # shadcn/ui components
+├── lib/                  # Utility functions and helpers
+├── hooks/                # Custom React hooks
+├── public/               # Static assets
+├── supabase/             # Supabase configuration and migrations
+├── types/                # TypeScript type definitions
+└── ProjectDocs/          # Project documentation
 ```
 
-**Edit a file directly in GitHub**
+## 🔧 Development Setup
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Prerequisites
 
-**Use GitHub Codespaces**
+- Node.js 18+ and npm
+- Supabase account and CLI
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### Installation
 
-## What technologies are used for this project?
+1. Clone the repository:
+   ```sh
+   git clone https://github.com/your-username/autocrm.git
+   cd autocrm
+   ```
 
-This project is built with .
+2. Install dependencies:
+   ```sh
+   npm install
+   ```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+3. Set up environment variables:
+   ```sh
+   cp .env.example .env
+   # Fill in the required values in .env
+   ```
 
-## How can I deploy this project?
+4. Start the development server:
+   ```sh
+   npm run dev
+   ```
 
-Simply open [Lovable](https://lovable.dev/projects/cb629436-c7e5-4985-99e8-c66d44d080a3) and click on Share -> Publish.
+5. Open [http://localhost:3000](http://localhost:3000) to view the application.
 
-## I want to use a custom domain - is that possible?
+### Supabase Setup
 
-We don't support custom domains (yet). If you want to deploy your project under your own domain then we recommend using Netlify. Visit our docs for more details: [Custom domains](https://docs.lovable.dev/tips-tricks/custom-domain/)
+1. Install the Supabase CLI:
+   ```sh
+   npm install -g supabase
+   ```
+
+2. Link your Supabase project:
+   ```sh
+   supabase login
+   supabase link --project-ref <your-project-id>
+   ```
+
+3. Generate TypeScript types:
+   ```sh
+   npm run db:types
+   ```
+
+## 🧪 Testing
+
+- Run end-to-end tests:
+  ```sh
+  npm run test:e2e
+  ```
+
+- Run end-to-end tests with UI:
+  ```sh
+  npm run test:e2e:ui
+  ```
+
+- Run unit tests:
+  ```sh
+  npm run test:unit
+  ```
+
+## 📚 Available Scripts
+
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run start` - Start production server
+- `npm run lint` - Lint codebase
+- `npm run db:push` - Push database changes to Supabase
+- `npm run db:pull` - Pull database schema from Supabase
+- `npm run db:types` - Generate TypeScript types from Supabase schema
+- `npm run seed` - Seed the database with test data
+
+## 🧩 Project Structure Details
+
+### Role-Based Routes
+
+- **(admin)/** - Admin dashboard, user management, system settings
+- **(agent)/** - Agent workspace, ticket management, customer interactions
+- **(auth)/** - Authentication pages (login, register, password reset)
+- **(dashboard)/** - Customer dashboard, ticket creation and tracking
+- **(marketing)/** - Public marketing pages, landing page
+- **(public)/** - Other public-facing pages
+
+### Key Components
+
+- **TicketDetail** - Displays ticket information and conversation history
+- **TicketQueue** - Agent-facing ticket management with filters
+- **TeamOverview** - Admin page for team performance tracking
+- **KnowledgeBase** - Customer-facing resources and articles
+
+## 🤝 Contributing
+
+1. Create a feature branch: `git checkout -b feature/your-feature-name`
+2. Commit your changes: `git commit -m 'feat: add some feature'`
+3. Push to the branch: `git push origin feature/your-feature-name`
+4. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
