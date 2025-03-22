@@ -71,7 +71,7 @@
     "langchain": "^0.3.14",
     "linkify-react": "^4.2.0",
     "lucide-react": "^0.462.0",
-    "next": "^15.1.6",
+    "next": "^15.2.3",
     "next-themes": "^0.3.0",
     "openai": "^4.81.0",
     "openai-edge": "^1.2.2",
